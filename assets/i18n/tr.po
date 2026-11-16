@@ -4067,3 +4067,7 @@ msgstr "gönderilmedi"
 
 #~ msgid "Channel"
 #~ msgstr "Kanal"
+
+#: src/ui/conversation.rs
+msgid "Transcribe"
+msgstr "Yazıya dök"

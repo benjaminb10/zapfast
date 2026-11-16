@@ -4045,3 +4045,7 @@ msgstr "afgespeeld"
 #: src/a11y.rs:362
 msgid "not sent"
 msgstr "niet verzonden"
+
+#: src/ui/conversation.rs
+msgid "Transcribe"
+msgstr "Transcriberen"

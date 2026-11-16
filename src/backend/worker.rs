@@ -63,6 +63,7 @@ mod prefetch;
 mod star_recovery;
 mod sticker_pace;
 mod stickers;
+mod transcripts;
 #[cfg(test)]
 mod write_batching;
 
@@ -1081,6 +1082,8 @@ pub async fn run(
         stars_recovered,
         stars_recovering: false,
         downloads: HashSet::new(),
+        transcribing: HashSet::new(),
+        transcript_downloads: HashSet::new(),
         read_sync: ReadSync::default(),
         favorite_chats: Default::default(),
         poll_decrypting: 0,
@@ -1712,6 +1715,10 @@ struct Worker {
     stars_recovering: bool,
     /// Active attachment downloads by chat, message id, and carousel card.
     downloads: HashSet<(ChatId, String, Option<usize>)>,
+    /// Voice messages being transcribed, by chat and message id.
+    transcribing: HashSet<(ChatId, String)>,
+    /// Those of them waiting for their voice message to download.
+    transcript_downloads: HashSet<(ChatId, String)>,
     /// Serial forward in flight. The next send waits for the running one.
     forward_queue: Option<ForwardQueue<ForwardJob>>,
     call: Option<calls::CallRuntime>,
@@ -2040,6 +2047,7 @@ impl Worker {
                     | Event::ChatShared { .. }
                     | Event::ChatSharedChanged(_)
                     | Event::ChatMedia { .. }
+                    | Event::Transcripts { .. }
             )
         {
             return;
@@ -7605,6 +7613,12 @@ impl Worker {
                 chat,
                 message,
             } => self.download_media(chat, message, card, manual),
+            Command::Transcribe { chat, message } => self.transcribe(chat, message),
+            Command::Transcribed {
+                chat,
+                message,
+                result,
+            } => self.transcribed(chat, message, result),
             Command::FetchAvatar { id, full } => self.fetch_avatar(id, full),
             Command::LoadChatMedia { chat, around } => self.emit_chat_media(chat, around),
             Command::EditText {
@@ -10668,12 +10682,16 @@ impl Worker {
                 .insert((chat.clone(), id.clone()));
         }
         let result_ok = result.is_ok();
+        let for_transcript = card.is_none().then(|| result.clone());
         self.emit(Event::Media {
             card,
-            chat,
-            message: id,
+            chat: chat.clone(),
+            message: id.clone(),
             result,
         });
+        if let Some(result) = for_transcript {
+            self.transcript_download_settled(chat, id, result);
+        }
         if retried && !for_picker && result_ok {
             self.emit_stickers();
         }
@@ -11087,6 +11105,7 @@ impl Worker {
                 for message in &mut messages {
                     self.polish(message);
                 }
+                self.emit_transcripts(chat, &messages);
                 self.emit(Event::Messages {
                     chat: chat.clone(),
                     messages,
@@ -11135,6 +11154,7 @@ impl Worker {
                 for message in &mut messages {
                     self.polish(message);
                 }
+                self.emit_transcripts(&chat, &messages);
                 self.emit(Event::Messages {
                     chat,
                     messages,
@@ -20463,6 +20483,8 @@ mod receipt_tests {
             stars_recovered: true,
             stars_recovering: false,
             downloads: HashSet::new(),
+            transcribing: HashSet::new(),
+            transcript_downloads: HashSet::new(),
             read_sync: ReadSync::default(),
             favorite_chats: Default::default(),
             poll_decrypting: 0,

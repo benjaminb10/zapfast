@@ -161,6 +161,9 @@ sonora-aec3 = "0.2"
 symphonia = { version = "0.5.5", default-features = false, features = ["aac"] }
 opus = "0.4"
 ogg = "0.9"
+# Transcribes voice messages on this computer with whisper.cpp, on request.
+# Its log output goes through `log` instead of stderr.
+whisper-rs = { version = "0.16", features = ["log_backend"] }
 # Converts animated Signal APNG stickers to the animated WebP used by WhatsApp.
 webp-animation = "0.10"
 # Encodes stickers made from pictures as still lossy WebP. Already included

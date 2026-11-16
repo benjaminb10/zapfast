@@ -4014,3 +4014,7 @@ msgstr "回车发送"
 
 #~ msgid "Next pinned message"
 #~ msgstr "下一条置顶消息"
+
+#: src/ui/conversation.rs
+msgid "Transcribe"
+msgstr "转写"

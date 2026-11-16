@@ -3871,3 +3871,28 @@ msgstr ""
 #: src/a11y.rs:362
 msgid "not sent"
 msgstr ""
+
+#: src/ui/conversation.rs
+msgid "Transcribe"
+msgstr ""
+
+#: src/ui/conversation.rs
+#, rust-format
+msgid "Downloading the speech model… {percent}%"
+msgstr ""
+
+#: src/ui/conversation.rs
+msgid "Downloading the speech model…"
+msgstr ""
+
+#: src/ui/conversation.rs
+msgid "Transcribing…"
+msgstr ""
+
+#: src/ui/settings.rs
+msgid "Transcribe voice messages automatically"
+msgstr ""
+
+#: src/ui/settings.rs
+msgid "On this computer, as they arrive. The first one downloads the speech model (574 MB)."
+msgstr ""

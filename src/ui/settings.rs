@@ -439,6 +439,14 @@ fn sections(app: &App) -> Vec<Section> {
         ),
         |settings| &mut settings.auto_download,
     );
+    chats.toggle(
+        translated(locale, "Transcribe voice messages automatically"),
+        translated(
+            locale,
+            "On this computer, as they arrive. The first one downloads the speech model (574 MB).",
+        ),
+        |settings| &mut settings.auto_transcribe,
+    );
     chats.account_toggle(
         translated(locale, "Fetch older history"),
         translated(

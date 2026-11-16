@@ -4124,3 +4124,7 @@ msgstr "Invio invia"
 
 #~ msgid "Next pinned message"
 #~ msgstr "Messaggio fissato successivo"
+
+#: src/ui/conversation.rs
+msgid "Transcribe"
+msgstr "Trascrivi"

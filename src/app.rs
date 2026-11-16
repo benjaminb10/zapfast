@@ -2815,10 +2815,33 @@ impl App {
     /// Drops every trace of a chat that no longer exists. Unlike hiding a
     /// locked chat this discards the draft, because there is nothing left to
     /// send it to, and it clears `last_chat` so a restart does not reopen it.
+    /// Asks the account's worker for a voice message's transcript, unless it
+    /// is known or under way. A locked chat, or a locked app, asks for none:
+    /// its words must not reach the screen.
+    fn request_transcript(&mut self, chat: ChatId, message: String) {
+        if self.app_lock.is_locked() || self.chat(&chat).is_some_and(|chat| chat.locked) {
+            return;
+        }
+        if self
+            .transcripts
+            .get(&chat)
+            .is_some_and(|known| known.contains_key(&message))
+        {
+            return;
+        }
+        let running = self.transcribing.entry(chat.clone()).or_default();
+        if running.contains_key(&message) {
+            return;
+        }
+        running.insert(message.clone(), crate::transcribe::Progress::Transcribing);
+        self.backend.send(Command::Transcribe { chat, message });
+    }
+
     fn forget_chat(&mut self, id: &str) {
         self.leave_chat(id);
         self.chats.retain(|chat| chat.id != id);
         self.conversations.remove(id);
+        self.transcripts.remove(id);
         // The recorded places belong to the account on screen, and chat ids
         // repeat across accounts.
         if !self.events_hidden {
@@ -4093,7 +4116,71 @@ impl App {
                         .collect();
                 }
             }
-            Event::Incoming { chat, message } => self.maybe_notify(&chat, &message),
+            Event::Incoming { chat, message } => {
+                self.maybe_notify(&chat, &message);
+                if self.settings.auto_transcribe
+                    && !message.from_me
+                    && matches!(
+                        message.content,
+                        Content::Audio {
+                            voice_note: true,
+                            ..
+                        }
+                    )
+                {
+                    self.request_transcript(chat, message.id.clone());
+                }
+            }
+            Event::Transcript {
+                chat,
+                message,
+                result,
+            } => {
+                if let Some(running) = self.transcribing.get_mut(&chat) {
+                    running.remove(&message);
+                }
+                match result {
+                    Ok(text) => {
+                        self.transcripts
+                            .entry(chat)
+                            .or_default()
+                            .insert(message, text);
+                    }
+                    // Said only of a message still on screen: one deleted
+                    // meanwhile needs no word about it.
+                    Err(error)
+                        if live
+                            && self.open_chat.as_deref() == Some(chat.as_str())
+                            && self.conversations.get(&chat).is_some_and(|conversation| {
+                                conversation.message(&message).is_some()
+                            }) =>
+                    {
+                        self.toast_error(error);
+                    }
+                    Err(_) => {}
+                }
+            }
+            Event::TranscriptProgress {
+                chat,
+                message,
+                progress,
+            } => {
+                // Only for a request still waiting: a late word after the
+                // answer would bring its spinner back.
+                if let Some(running) = self
+                    .transcribing
+                    .get_mut(&chat)
+                    .and_then(|running| running.get_mut(&message))
+                {
+                    *running = progress;
+                }
+            }
+            Event::Transcripts { chat, transcripts } => {
+                self.transcripts
+                    .entry(chat)
+                    .or_default()
+                    .extend(transcripts);
+            }
             Event::Picked {
                 chat,
                 paths,
@@ -4435,6 +4522,9 @@ impl App {
                 }
                 if let Some(conversation) = self.conversations.get_mut(&chat) {
                     conversation.messages.retain(|message| message.id != id);
+                }
+                if let Some(transcripts) = self.transcripts.get_mut(&chat) {
+                    transcripts.remove(&id);
                 }
                 if live && self.editing.as_deref() == Some(id.as_str()) {
                     self.editing = None;
@@ -5393,6 +5483,13 @@ impl App {
                     .is_some_and(|(_, target)| conversation.message(target).is_none()),
             )
         };
+        // What went took its transcripts with it.
+        if let Some(mut transcripts) = self.transcripts.remove(id) {
+            if let Some(conversation) = self.conversations.get(id) {
+                transcripts.retain(|message, _| conversation.message(message).is_some());
+            }
+            self.transcripts.insert(id.to_owned(), transcripts);
+        }
         if open && live {
             if editing_gone {
                 self.editing = None;
@@ -7809,6 +7906,7 @@ impl App {
                 motion.state = MediaState::Downloading;
                 self.backend.send(Command::DownloadMotion { chat, message });
             }
+            Action::Transcribe { chat, message } => self.request_transcript(chat, message),
             Action::Download {
                 manual,
                 card,
@@ -20418,6 +20516,158 @@ mod tests {
             waveform: Vec::new(),
         };
         row
+    }
+
+    #[test]
+    fn a_transcript_stays_with_the_account_that_made_it() {
+        let directory = tempfile::tempdir().unwrap();
+        let (mut app, _) = two_accounts(directory.path());
+        let (backend, _, events) = Backend::recording_with_events();
+        app.accounts[1].backend = backend;
+        let chat = "fixture@s.whatsapp.net";
+        app.accounts[0]
+            .transcripts
+            .entry(chat.into())
+            .or_default()
+            .insert("voice".into(), "first account".into());
+        events
+            .send(Event::Transcript {
+                chat: chat.into(),
+                message: "voice".into(),
+                result: Ok("second account".into()),
+            })
+            .unwrap();
+        app.handle_events();
+        assert_eq!(app.active, 0);
+        assert_eq!(app.accounts[0].transcripts[chat]["voice"], "first account");
+        assert_eq!(app.accounts[1].transcripts[chat]["voice"], "second account");
+    }
+
+    #[test]
+    fn a_locked_chat_is_never_transcribed() {
+        let mut app = app();
+        let (backend, mut commands) = Backend::recording();
+        app.backend = backend;
+        let mut chat = Chat::new("fixture@s.whatsapp.net".into(), "Fixture".into());
+        chat.locked = true;
+        app.chats.push(chat);
+        let ctx = egui::Context::default();
+        app.apply(
+            Action::Transcribe {
+                chat: "fixture@s.whatsapp.net".into(),
+                message: "voice".into(),
+            },
+            &ctx,
+        );
+        assert!(commands.try_recv().is_err());
+        assert!(app.transcribing.is_empty());
+    }
+
+    #[test]
+    fn a_transcription_is_asked_for_once_and_its_answer_ends_it() {
+        let mut app = app();
+        let (backend, mut commands, events) = Backend::recording_with_events();
+        app.backend = backend;
+        let chat = "1@s.whatsapp.net";
+        app.chats.push(Chat::new(chat.into(), "Ada".into()));
+        let ctx = egui::Context::default();
+        let ask = || Action::Transcribe {
+            chat: chat.into(),
+            message: "voice".into(),
+        };
+        app.apply(ask(), &ctx);
+        app.apply(ask(), &ctx);
+        assert!(matches!(
+            commands.try_recv(),
+            Ok(Command::Transcribe { message, .. }) if message == "voice"
+        ));
+        assert!(commands.try_recv().is_err(), "asked for twice");
+        events
+            .send(Event::Transcript {
+                chat: chat.into(),
+                message: "voice".into(),
+                result: Err("fixture failure".into()),
+            })
+            .unwrap();
+        // A late progress word after the answer brings nothing back.
+        events
+            .send(Event::TranscriptProgress {
+                chat: chat.into(),
+                message: "voice".into(),
+                progress: crate::transcribe::Progress::Transcribing,
+            })
+            .unwrap();
+        app.handle_events();
+        assert!(app.transcribing[chat].is_empty());
+        // It can be asked for again after a failure.
+        app.apply(ask(), &ctx);
+        assert!(commands.try_recv().is_ok());
+    }
+
+    #[test]
+    fn incoming_voice_messages_are_transcribed_only_when_asked_to() {
+        let mut app = app();
+        let (backend, mut commands, events) = Backend::recording_with_events();
+        app.backend = backend;
+        let chat = "1@s.whatsapp.net";
+        app.chats.push(Chat::new(chat.into(), "Ada".into()));
+        let arrive = |id: &str, timestamp| {
+            let message = voice(chat, id, timestamp, None);
+            events
+                .send(Event::Messages {
+                    chat: chat.into(),
+                    messages: vec![message.clone()],
+                    older: false,
+                    complete: false,
+                })
+                .unwrap();
+            events
+                .send(Event::Incoming {
+                    chat: chat.into(),
+                    message: Box::new(message),
+                })
+                .unwrap();
+        };
+        arrive("off", 1);
+        app.handle_events();
+        assert!(
+            !std::iter::from_fn(|| commands.try_recv().ok())
+                .any(|command| matches!(command, Command::Transcribe { .. })),
+            "off by default"
+        );
+        app.settings.auto_transcribe = true;
+        arrive("on", 2);
+        app.handle_events();
+        assert!(
+            std::iter::from_fn(|| commands.try_recv().ok()).any(|command| matches!(
+                command,
+                Command::Transcribe { message, .. } if message == "on"
+            ))
+        );
+    }
+
+    #[test]
+    fn a_deleted_voice_message_takes_its_transcript_with_it() {
+        let mut app = app();
+        let (backend, _, events) = Backend::recording_with_events();
+        app.backend = backend;
+        let chat = "1@s.whatsapp.net";
+        events
+            .send(Event::Transcripts {
+                chat: chat.into(),
+                transcripts: vec![("voice".into(), "words".into())],
+            })
+            .unwrap();
+        app.handle_events();
+        assert_eq!(app.transcripts[chat]["voice"], "words");
+        events
+            .send(Event::MessageDeleted {
+                chat: chat.into(),
+                id: "voice".into(),
+            })
+            .unwrap();
+        app.handle_events();
+        assert!(app.transcripts[chat].is_empty());
     }
 
     #[test]

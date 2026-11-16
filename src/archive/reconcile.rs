@@ -63,6 +63,14 @@ impl Archive {
                 AND (current.id IS NULL OR json_extract(current.content, '$.kind') = 'image')",
             params![source, target],
         )?;
+        // A transcript follows its message; the source's own goes with it.
+        transaction.execute(
+            "INSERT OR IGNORE INTO transcripts (chat, id, text)
+             SELECT ?2, t.id, t.text FROM transcripts t
+             JOIN messages current ON current.chat = ?2 AND current.id = t.id
+             WHERE t.chat = ?1 AND json_extract(current.content, '$.kind') <> 'revoked'",
+            params![source, target],
+        )?;
         // A canonical copy may predate the clip. Mark it only when the clip's
         // sender is the photo's sender (the two mapped ids are equivalent).
         transaction.execute(

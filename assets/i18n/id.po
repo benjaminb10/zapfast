@@ -4118,3 +4118,7 @@ msgstr "Enter untuk mengirim"
 #, fuzzy
 #~ msgid "Next pinned message"
 #~ msgstr "{} pesan belum dibaca"
+
+#: src/ui/conversation.rs
+msgid "Transcribe"
+msgstr "Transkripsikan"

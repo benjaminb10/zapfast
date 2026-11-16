@@ -20,6 +20,7 @@ On Linux:
 | Stickers and packs | `~/.local/state/zapfast/accounts/<id>/stickers/` | Plain WebP files; each pack is a folder |
 | Wallpaper image | `~/.local/state/zapfast/accounts/<id>/wallpaper.jpg` | Copy of the chosen picture (or `.png`, `.webp`, `.gif`) |
 | Attachments, avatars | `~/.cache/zapfast/accounts/<id>/` | Safe to delete; available files download again when viewed |
+| Speech model | `~/.cache/zapfast/models/` | Shared by every number; downloaded the first time you transcribe a voice message, safe to delete |
 | Last run's log | `~/.local/state/zapfast/zapfast.log` | `--verbose` for more |
 | The run before's log | `~/.local/state/zapfast/zapfast.previous.log` | Kept for one more start |
 | Crash log | `~/.local/state/zapfast/panic.log` | Safe to delete |
@@ -160,6 +161,10 @@ name or description, in the interface language or in English.
 - **Download files automatically**: attachments up to 64 MiB download as they
   come into view. When off, click one to download it. Visible stickers still
   download automatically. Larger attachments download only when clicked.
+- **Transcribe voice messages automatically**: off by default. When on,
+  voice messages that arrive are transcribed on this computer as they come,
+  as if you had pressed their transcribe button (see
+  [Voice transcripts](#voice-transcripts)).
 - **Fetch older history**: off by default, and set for
   each number. When on, ZapFast asks the phone for older messages without you
   scrolling: the open chat first, then pinned chats and the ten most recently
@@ -283,6 +288,31 @@ collapses it to a column of avatars with unread badges.
 Settings from earlier versions that no longer exist are ignored and dropped
 the next time settings are saved. The two earlier media pause switches become
 the one above: it stays on only if both were on.
+
+## Voice transcripts
+
+ZapFast turns a voice message into text on this computer with
+[whisper.cpp](https://github.com/ggml-org/whisper.cpp) and OpenAI's
+multilingual Whisper large-v3-turbo model, in its 5-bit form
+(`ggml-large-v3-turbo-q5_0.bin`, 574 MB). The model is not part of the
+download: the first transcription fetches it once from
+[Hugging Face](https://huggingface.co/ggerganov/whisper.cpp), the only
+network access the feature makes, and a cut download resumes where it
+stopped. ZapFast uses the file only when its size and SHA-256 digest match
+the published model's, so a damaged or different file is downloaded again
+rather than loaded. The recording and its text never leave the computer.
+The language is detected for each message.
+
+Transcripts are kept in the encrypted message archive, so a voice message
+shows its words again after a restart. Deleting the message, here or for
+everyone, deleting or clearing its chat, or unlinking the number deletes its
+transcript too. The model stays in memory for five minutes after the last
+transcription and is then released.
+
+If you already have that model file, for example from another whisper.cpp
+tool, start ZapFast with `ZAPFAST_WHISPER_MODEL` set to its path to use it
+instead of downloading a copy, or copy it into the speech model folder
+above. It is checked the same way, and refused if it is not the same file.
 
 ## App lock
 

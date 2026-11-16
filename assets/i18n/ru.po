@@ -4148,3 +4148,7 @@ msgstr "Enter отправляет"
 
 #~ msgid "Next pinned message"
 #~ msgstr "Следующее закреплённое сообщение"
+
+#: src/ui/conversation.rs
+msgid "Transcribe"
+msgstr "Расшифровать"

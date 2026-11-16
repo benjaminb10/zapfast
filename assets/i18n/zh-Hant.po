@@ -4015,3 +4015,7 @@ msgstr "以 Enter 送出"
 #, fuzzy
 #~ msgid "Next pinned message"
 #~ msgstr "{} 則未讀訊息"
+
+#: src/ui/conversation.rs
+msgid "Transcribe"
+msgstr "轉寫"

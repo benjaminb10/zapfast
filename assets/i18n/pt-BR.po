@@ -4123,3 +4123,7 @@ msgstr "Enter envia"
 
 #~ msgid "Next pinned message"
 #~ msgstr "Próxima mensagem fixada"
+
+#: src/ui/conversation.rs
+msgid "Transcribe"
+msgstr "Transcrever"

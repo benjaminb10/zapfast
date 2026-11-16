@@ -2850,6 +2850,11 @@ pub enum Action {
         chat: ChatId,
         message: String,
     },
+    /// Transcribes a voice message on this computer.
+    Transcribe {
+        chat: ChatId,
+        message: String,
+    },
     Download {
         /// The reader asked for it (a click, a menu item): exempt from the
         /// automatic download limit.

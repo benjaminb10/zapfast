@@ -104,6 +104,7 @@ impl AppDirs {
             id: id.clone(),
             state: self.state.join("accounts").join(id.as_str()),
             cache: self.cache.join("accounts").join(id.as_str()),
+            models: self.transcription_model_dir(),
         }
     }
 
@@ -114,6 +115,7 @@ impl AppDirs {
             id: AccountId::first(),
             state: self.state.clone(),
             cache: self.cache.clone(),
+            models: self.transcription_model_dir(),
         }
     }
 
@@ -255,6 +257,11 @@ impl AppDirs {
         self.cache.join("media")
     }
 
+    /// Speech models for transcribing voice messages, downloaded on first use.
+    pub fn transcription_model_dir(&self) -> PathBuf {
+        self.cache.join("models")
+    }
+
     /// Profile pictures keyed by chat.
     pub fn avatar_cache_dir(&self) -> PathBuf {
         self.cache.join("avatars")
@@ -309,6 +316,9 @@ pub struct AccountDirs {
     pub id: AccountId,
     pub state: PathBuf,
     pub cache: PathBuf,
+    /// The app's speech models, shared by every account: they hold nothing
+    /// of anyone's, and each is hundreds of megabytes.
+    models: PathBuf,
 }
 
 impl AccountDirs {
@@ -342,6 +352,11 @@ impl AccountDirs {
 
     pub fn media_cache_dir(&self) -> PathBuf {
         self.cache.join("media")
+    }
+
+    /// The app's speech models (see [`AppDirs::transcription_model_dir`]).
+    pub fn transcription_model_dir(&self) -> PathBuf {
+        self.models.clone()
     }
 
     pub fn avatar_cache_dir(&self) -> PathBuf {

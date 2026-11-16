@@ -4139,3 +4139,7 @@ msgstr "Enter sendet"
 
 #~ msgid "Next pinned message"
 #~ msgstr "Nächste angepinnte Nachricht"
+
+#: src/ui/conversation.rs
+msgid "Transcribe"
+msgstr "Transkribieren"

@@ -81,6 +81,11 @@ pub struct Account {
     /// How far each downloading attachment has got, by chat and message, as
     /// the worker last said.
     pub download_progress: HashMap<ChatId, HashMap<String, u8>>,
+    /// Voice messages' transcripts, by chat and message, as far as the
+    /// window has seen them. Personal data: never logged.
+    pub transcripts: HashMap<ChatId, HashMap<String, String>>,
+    /// Transcriptions under way, by chat and message, with where each is.
+    pub transcribing: HashMap<ChatId, HashMap<String, crate::transcribe::Progress>>,
     /// Files going out, oldest first, for the strip above the composer.
     pub uploads: Vec<crate::model::Upload>,
     pub stickers: Vec<PathBuf>,
@@ -216,6 +221,8 @@ impl Account {
             avatar_full_requests: HashSet::new(),
             played_told: HashSet::new(),
             download_progress: HashMap::new(),
+            transcripts: HashMap::new(),
+            transcribing: HashMap::new(),
             uploads: Vec::new(),
             stickers: Vec::new(),
             stickers_received: Vec::new(),

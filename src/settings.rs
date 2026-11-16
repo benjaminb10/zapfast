@@ -456,6 +456,9 @@ pub struct Settings {
     /// Download attachments when they enter view instead of on click.
     #[serde(alias = "auto_download_images")]
     pub auto_download: bool,
+    /// Transcribe voice messages as they arrive, on this computer. Off by
+    /// default: the first one downloads the speech model.
+    pub auto_transcribe: bool,
     /// Show the default doodle wallpaper behind conversations.
     pub show_wallpaper: bool,
     /// Colour selected in the wallpaper picker.
@@ -570,6 +573,7 @@ impl Default for Settings {
             send_read_receipts: true,
             send_typing: true,
             auto_download: true,
+            auto_transcribe: false,
             show_wallpaper: true,
             wallpaper_color: WallpaperColor::Theme,
             dark_wallpaper_color: WallpaperColor::Theme,

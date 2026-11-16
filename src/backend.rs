@@ -349,6 +349,18 @@ pub enum Command {
         chat: ChatId,
         message: String,
     },
+    /// Transcribes a voice message on this computer, downloading the voice
+    /// message and the speech model first when they are missing.
+    Transcribe {
+        chat: ChatId,
+        message: String,
+    },
+    /// A transcription's result, from the thread that ran it.
+    Transcribed {
+        chat: ChatId,
+        message: String,
+        result: Result<String, String>,
+    },
     /// Downloads a motion photo's clip.
     DownloadMotion {
         chat: ChatId,
@@ -1441,6 +1453,24 @@ pub enum Event {
         chat: ChatId,
         message: String,
         result: Result<PathBuf, String>,
+    },
+    /// A voice message's transcript, or why there is none. Answers every
+    /// `Command::Transcribe`.
+    Transcript {
+        chat: ChatId,
+        message: String,
+        result: Result<String, String>,
+    },
+    /// Where a requested transcription is.
+    TranscriptProgress {
+        chat: ChatId,
+        message: String,
+        progress: crate::transcribe::Progress,
+    },
+    /// Stored transcripts of messages just sent to the window.
+    Transcripts {
+        chat: ChatId,
+        transcripts: Vec<(String, String)>,
     },
     /// How far an attachment download has got, for its ring.
     DownloadProgress {

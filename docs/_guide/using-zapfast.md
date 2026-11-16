@@ -555,6 +555,14 @@ the delete button to discard it. ZapFast raises the volume of quiet recordings.
 Starting a reply before recording includes the quoted message.
 When someone else records a voice message, a microphone replaces the typing dots.
 
+To read a voice message instead of playing it, press the transcribe button
+beside its waveform, or choose **Transcribe** from its menu. Its words appear
+under the player, where you can select and copy them. The transcription runs
+on your computer, and nothing is sent anywhere; the first one downloads the
+speech model (574 MB) once. **Settings > Chats > Transcribe voice messages
+automatically** does it for every voice message as it arrives. See
+[Voice transcripts](/settings-and-files/#voice-transcripts).
+
 ## Calls
 
 The phone and camera buttons in a one-to-one chat's header start a voice or a

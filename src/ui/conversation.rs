@@ -2678,6 +2678,10 @@ struct View<'a> {
     copy_rows: Option<&'a std::sync::Mutex<Vec<crate::transcript::Row>>>,
     /// How far this chat's downloading attachments have got, by message.
     download_progress: Option<&'a HashMap<String, u8>>,
+    /// This chat's voice transcripts, by message.
+    transcripts: Option<&'a HashMap<String, String>>,
+    /// This chat's transcriptions under way, by message.
+    transcribing: Option<&'a HashMap<String, crate::transcribe::Progress>>,
 }
 
 /// How far `message`'s attachment download has got, once the worker has said.
@@ -2797,7 +2801,13 @@ fn album_run(messages: &[Message], start: usize) -> Option<&[Message]> {
 /// near the viewport are always measured, and a change in the height of a row
 /// above the viewport moves the scroll offset with it, so this only shapes the
 /// scrollbar until the reader scrolls near the row.
-fn estimated_height(message: &Message, width: f32, new_day: bool, notices: usize) -> f32 {
+fn estimated_height(
+    message: &Message,
+    transcript: Option<&str>,
+    width: f32,
+    new_day: bool,
+    notices: usize,
+) -> f32 {
     // Bubbles take at most 72% of the transcript, and 560 points.
     let bubble = ((width * 0.72).min(560.0) - 20.0).max(40.0);
     let text_rows = |text: &str| {
@@ -2819,7 +2829,7 @@ fn estimated_height(message: &Message, width: f32, new_day: bool, notices: usize
         }
         Content::Document { caption, .. } => 70.0 + caption_rows(caption),
         Content::Sticker { .. } => 140.0,
-        Content::Audio { .. } => 60.0,
+        Content::Audio { .. } => 60.0 + transcript.map_or(0.0, |text| text_rows(text) * 19.0),
         Content::DisappearingTimer { .. } => 0.0,
         _ => 40.0,
     };
@@ -3142,6 +3152,8 @@ fn messages(app: &mut App, ui: &mut egui::Ui, chat: &Chat, under: f32) {
         copy_rows: (!app.selection.as_ref().is_some_and(|(id, _)| *id == chat.id))
             .then_some(app.copy_rows.as_ref()),
         download_progress: app.download_progress.get(&chat.id),
+        transcripts: app.transcripts.get(&chat.id),
+        transcribing: app.transcribing.get(&chat.id),
     };
     let mut actions = Vec::new();
     let mut anchored = false;
@@ -3505,7 +3517,13 @@ fn messages(app: &mut App, ui: &mut egui::Ui, chat: &Chat, under: f32) {
                         let here = notices_above(&notices[placed..], message.timestamp);
                         let known = rows.get(&message.id).copied();
                         let height = known.map_or_else(
-                            || estimated_height(message, layout_width, new_day, here),
+                            || {
+                                let transcript = view
+                                    .transcripts
+                                    .and_then(|known| known.get(&message.id))
+                                    .map(String::as_str);
+                                estimated_height(message, transcript, layout_width, new_day, here)
+                            },
                             |row| row.height,
                         );
                         // A pass redone after the offset followed rows that
@@ -7040,6 +7058,7 @@ fn message_menu_labels(locale: crate::i18n::Locale) -> Vec<String> {
         gettext(locale, "Delete for everyone"),
         gettext(locale, "Delete for me"),
         gettext(locale, "Add to favorites"),
+        gettext(locale, "Transcribe"),
         gettext(locale, "Open in system player"),
         gettext(locale, "Open file"),
         gettext(locale, "Copy image"),
@@ -7120,6 +7139,8 @@ pub(crate) fn list_menu(
         account_receipts_off: app.account_receipts_off,
         copy_rows: Some(app.copy_rows.as_ref()),
         download_progress: app.download_progress.get(&chat.id),
+        transcripts: app.transcripts.get(&chat.id),
+        transcribing: app.transcribing.get(&chat.id),
         selecting: false,
         motion_playing: None,
         starred: marks.starred.then_some(&stars),
@@ -7568,6 +7589,30 @@ fn context_menu(
         )
     {
         actions.push(Action::SaveSticker(path.clone()));
+    }
+    if matches!(
+        message.content,
+        Content::Audio {
+            voice_note: true,
+            ..
+        }
+    ) && !view
+        .transcripts
+        .is_some_and(|known| known.contains_key(&message.id))
+        && !view
+            .transcribing
+            .is_some_and(|running| running.contains_key(&message.id))
+        && widgets::menu_item(
+            ui,
+            &palette,
+            Some(Icon::FileText),
+            &crate::i18n::gettext(view.locale, "Transcribe"),
+        )
+    {
+        actions.push(Action::Transcribe {
+            chat: chat.clone(),
+            message: message.id.clone(),
+        });
     }
     if let Some(media) = message.content.media() {
         match &media.path {
@@ -8149,6 +8194,12 @@ fn content(
         Content::Image { caption, .. }
         | Content::Video { caption, .. }
         | Content::Document { caption, .. } => caption.is_some(),
+        // A transcript is drawn like a caption, and copied as one.
+        Content::Audio {
+            voice_note: true, ..
+        } => view
+            .transcripts
+            .is_some_and(|known| known.contains_key(&message.id)),
         _ => false,
     };
     if !has_body && let Some(copy_rows) = view.copy_rows {
@@ -8271,10 +8322,17 @@ fn content(
             media,
             seconds,
             waveform,
-            ..
-        } => voice_player(
-            ui, view, message, media, *seconds, waveform, width, reserve, actions,
-        ),
+            voice_note,
+        } => {
+            let footer = voice_player(
+                ui, view, message, media, *seconds, waveform, width, reserve, actions,
+            );
+            if *voice_note {
+                voice_transcript(ui, view, message, width, reserve, actions).unwrap_or(footer)
+            } else {
+                footer
+            }
+        }
         Content::Document {
             media,
             file_name,
@@ -11255,6 +11313,61 @@ fn bottom_filler(viewport: f32, natural: Option<f32>, spacing: f32) -> f32 {
     natural.map_or(0.0, |natural| (viewport - natural - spacing).max(0.0))
 }
 
+/// The transcribe button's icon, beside a voice message's waveform.
+const TRANSCRIBE_ICON: f32 = 18.0;
+
+/// What a transcription under way is doing, for its line and tooltip.
+fn transcript_status(locale: crate::i18n::Locale, progress: crate::transcribe::Progress) -> String {
+    use crate::transcribe::Progress;
+    match progress {
+        Progress::DownloadingModel(Some(percent)) => {
+            crate::i18n::gettext(locale, "Downloading the speech model… {percent}%")
+                .replace("{percent}", &percent.to_string())
+        }
+        Progress::DownloadingModel(None) => {
+            crate::i18n::gettext(locale, "Downloading the speech model…").into_owned()
+        }
+        Progress::Transcribing => crate::i18n::gettext(locale, "Transcribing…").into_owned(),
+    }
+}
+
+/// A voice message's words under its player, selectable like a message's
+/// text, or the line saying how far the transcription has got. Returns the
+/// footer's place on the words' last line, as a body does.
+fn voice_transcript(
+    ui: &mut egui::Ui,
+    view: &View<'_>,
+    message: &Message,
+    width: f32,
+    reserve: f32,
+    actions: &mut Vec<Action>,
+) -> Option<Option<Rect>> {
+    if let Some(text) = view.transcripts.and_then(|known| known.get(&message.id)) {
+        ui.add_space(4.0);
+        return Some(rich_body(
+            ui,
+            view,
+            message,
+            text,
+            width,
+            Some(reserve),
+            Some(width),
+            actions,
+        ));
+    }
+    let progress = view
+        .transcribing
+        .and_then(|running| running.get(&message.id))?;
+    ui.add_space(2.0);
+    theme::text(
+        ui,
+        transcript_status(view.locale, *progress),
+        theme::regular(11.5),
+        view.palette.secondary,
+    );
+    Some(None)
+}
+
 /// Draws the in-chat player with a waveform for voice notes or a track and music badge
 /// for audio files. Playback, seeking and speed controls remain shared between both types.
 #[allow(clippy::too_many_arguments)]
@@ -11285,10 +11398,22 @@ fn voice_player(
     // The chip appears with the playable clip; the waveform takes its space
     // back while the audio is still downloading.
     let shows_chip = media.path.is_some();
+    // A voice message without its words yet offers to transcribe it, and
+    // shows the transcription's progress in that place while it runs.
+    let transcribe = voice_note
+        && !view
+            .transcripts
+            .is_some_and(|known| known.contains_key(&message.id));
+    let transcribe_slot = TRANSCRIBE_ICON + theme::ICON_BUTTON_PAD;
     let wave_width = (width
         - button
         - 10.0
         - if shows_chip { chip + 10.0 } else { 0.0 }
+        - if transcribe {
+            transcribe_slot + 10.0
+        } else {
+            0.0
+        }
         - if voice_note { 0.0 } else { button + 10.0 })
     .max(0.0);
     let bars: Vec<u8> = if !waveform.is_empty() {
@@ -11492,6 +11617,49 @@ fn voice_player(
                     });
                 }
             });
+            if transcribe {
+                let running = view
+                    .transcribing
+                    .and_then(|running| running.get(&message.id));
+                let size = Vec2::splat(transcribe_slot);
+                let (slot, _) = ui.allocate_exact_size(size, Sense::hover());
+                let at = Rect::from_center_size(
+                    pos2(slot.center().x, wave_middle.unwrap_or(slot.center().y)),
+                    size,
+                );
+                ui.scope_builder(egui::UiBuilder::new().max_rect(at), |ui| match running {
+                    Some(progress) => {
+                        let fraction = match progress {
+                            crate::transcribe::Progress::DownloadingModel(Some(percent)) => {
+                                Some(f32::from(*percent) / 100.0)
+                            }
+                            _ => None,
+                        };
+                        ui.centered_and_justified(|ui| {
+                            theme::progress(ui, 16.0, fraction, palette.accent)
+                                .on_hover_text(transcript_status(view.locale, *progress));
+                        });
+                    }
+                    None => {
+                        let label = crate::i18n::gettext(view.locale, "Transcribe");
+                        if theme::icon_button(
+                            ui,
+                            Icon::FileText,
+                            TRANSCRIBE_ICON,
+                            palette.secondary,
+                            palette.accent,
+                            &label,
+                        )
+                        .clicked()
+                        {
+                            actions.push(Action::Transcribe {
+                                chat: view.chat.id.clone(),
+                                message: message.id.clone(),
+                            });
+                        }
+                    }
+                });
+            }
             if !voice_note {
                 let (slot, response) = ui.allocate_exact_size(Vec2::splat(button), Sense::hover());
                 let at = Rect::from_center_size(
@@ -12853,6 +13021,8 @@ mod tests {
             account_receipts_off: false,
             copy_rows: Some(app.copy_rows.as_ref()),
             download_progress: None,
+            transcripts: None,
+            transcribing: None,
             selecting: false,
             motion_playing: None,
             starred: None,
@@ -13477,6 +13647,13 @@ mod reaction_tests {
             row(Content::Sticker {
                 media: media("image/webp", path, Idle),
                 animated: false,
+            }),
+            // Not downloaded, so it offers to transcribe without the speeds.
+            row(Content::Audio {
+                media: media("audio/ogg", None, Idle),
+                seconds: Some(3),
+                voice_note: true,
+                waveform: Vec::new(),
             }),
         ]
     }

@@ -32,6 +32,7 @@ mod reconcile;
 mod reconcile_tests;
 mod stars;
 mod stickers;
+mod transcripts;
 pub use polls::PollVote;
 pub use stars::Starred;
 pub use stickers::FavoriteSticker;
@@ -579,6 +580,7 @@ impl Archive {
         connection.execute_batch(favorites::SCHEMA)?;
         connection.execute_batch(stars::SCHEMA)?;
         connection.execute_batch(pins::SCHEMA)?;
+        connection.execute_batch(transcripts::SCHEMA)?;
         for (table, column, definition) in MIGRATIONS {
             let exists = connection
                 .prepare(&format!("PRAGMA table_info({table})"))?
@@ -2752,6 +2754,7 @@ impl Archive {
         if matches!(content, Content::Revoked) {
             // Deleted for everyone: the message is gone, so its pin is too.
             self.delete_pin(chat, id)?;
+            self.delete_transcript(chat, id)?;
         }
         Ok(changed > 0)
     }
@@ -2958,7 +2961,7 @@ impl Archive {
     /// Clears all archived data during unlinking.
     pub fn clear(&self) -> Result<()> {
         self.connection.execute_batch(
-            "DELETE FROM poll_history; DELETE FROM poll_votes; DELETE FROM polls; DELETE FROM group_receipts; DELETE FROM messages; DELETE FROM stars; DELETE FROM motion_clips; DELETE FROM chats; DELETE FROM chat_removals; DELETE FROM message_removals; DELETE FROM pending_message_removals; DELETE FROM contacts; DELETE FROM meta; DELETE FROM lids; DELETE FROM drafts; DELETE FROM local_chat_labels; DELETE FROM local_labels; DELETE FROM removed_recent_stickers; DELETE FROM favorite_stickers; DELETE FROM favorites; DELETE FROM favorite_changes;",
+            "DELETE FROM poll_history; DELETE FROM poll_votes; DELETE FROM polls; DELETE FROM group_receipts; DELETE FROM transcripts; DELETE FROM messages; DELETE FROM stars; DELETE FROM motion_clips; DELETE FROM chats; DELETE FROM chat_removals; DELETE FROM message_removals; DELETE FROM pending_message_removals; DELETE FROM contacts; DELETE FROM meta; DELETE FROM lids; DELETE FROM drafts; DELETE FROM local_chat_labels; DELETE FROM local_labels; DELETE FROM removed_recent_stickers; DELETE FROM favorite_stickers; DELETE FROM favorites; DELETE FROM favorite_changes;",
         )
     }
 }

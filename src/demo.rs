@@ -3979,6 +3979,19 @@ pub fn apply_flags(app: &mut App, page: Option<&str>) {
             // With "voice": the menu of a playable voice message, which
             // lists every playback speed.
             "voice-menu" => app.open_message_menu = message_menu(app, "ada-voice"),
+            // With "voice": one voice message read out under its player, and
+            // another being transcribed while the speech model downloads.
+            "voice-transcript" => {
+                let open = app.open_chat.clone().unwrap_or_default();
+                app.transcripts.entry(open.clone()).or_default().insert(
+                    "ada-voice".into(),
+                    "I'll meet you by the station at half past six, the café on the corner.".into(),
+                );
+                app.transcribing.entry(open).or_default().insert(
+                    "you-voice".into(),
+                    crate::transcribe::Progress::DownloadingModel(Some(42)),
+                );
+            }
             "react-menu" => {
                 app.open_message_menu = message_menu(app, "ada-link");
                 if let Some(row) = app
@@ -9828,6 +9841,7 @@ mod tests {
             "compose-emoji",
             "voice",
             "voice,voice-menu",
+            "voice,voice-transcript",
             "recording",
             "preview",
             "gifs",

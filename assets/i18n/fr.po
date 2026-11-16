@@ -4142,3 +4142,28 @@ msgstr "Entrée envoie"
 
 #~ msgid "Next pinned message"
 #~ msgstr "Message épinglé suivant"
+
+#: src/ui/conversation.rs
+msgid "Transcribe"
+msgstr "Transcrire"
+
+#: src/ui/conversation.rs
+#, rust-format
+msgid "Downloading the speech model… {percent}%"
+msgstr "Téléchargement du modèle vocal… {percent} %"
+
+#: src/ui/conversation.rs
+msgid "Downloading the speech model…"
+msgstr "Téléchargement du modèle vocal…"
+
+#: src/ui/conversation.rs
+msgid "Transcribing…"
+msgstr "Transcription…"
+
+#: src/ui/settings.rs
+msgid "Transcribe voice messages automatically"
+msgstr "Transcrire automatiquement les messages vocaux"
+
+#: src/ui/settings.rs
+msgid "On this computer, as they arrive. The first one downloads the speech model (574 MB)."
+msgstr "Sur cet ordinateur, dès leur arrivée. Le premier télécharge le modèle vocal (574 Mo)."
