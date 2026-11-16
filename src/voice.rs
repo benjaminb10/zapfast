@@ -17,6 +17,13 @@ const BITRATE: i32 = 32_000;
 
 /// Mono samples at `RATE` from an OGG/Opus file.
 pub fn decode(bytes: &[u8]) -> Result<Vec<f32>, String> {
+    decode_at(bytes, RATE)
+}
+
+/// Mono samples at `rate` from an OGG/Opus file. libopus decodes at 8, 12,
+/// 16, 24 or 48 kHz itself, so speech recognition gets its 16 kHz without a
+/// resampler.
+pub fn decode_at(bytes: &[u8], rate: u32) -> Result<Vec<f32>, String> {
     let bytes = without_stray_first_pages(bytes);
     let mut reader = ogg::PacketReader::new(Cursor::new(&bytes[..]));
     let mut stream: Option<Stream> = None;
@@ -29,7 +36,7 @@ pub fn decode(bytes: &[u8]) -> Result<Vec<f32>, String> {
             Err(error) => return Err(format!("bad OGG stream: {error}")),
         };
         let Some(current) = stream.as_mut() else {
-            stream = Some(Stream::open(&packet.data)?);
+            stream = Some(Stream::open(&packet.data, rate)?);
             continue;
         };
         if !current.tagged {
@@ -111,7 +118,7 @@ struct Stream {
 
 impl Stream {
     /// Reads the Opus identification header.
-    fn open(head: &[u8]) -> Result<Self, String> {
+    fn open(head: &[u8], rate: u32) -> Result<Self, String> {
         let head = head
             .strip_prefix(b"OpusHead")
             .ok_or_else(|| "not an Opus stream".to_owned())?;
@@ -119,13 +126,15 @@ impl Stream {
             return Err("truncated Opus header".to_owned());
         }
         let channels = usize::from(head[1]);
-        let skip = usize::from(u16::from_le_bytes([head[2], head[3]]));
+        // The pre-skip is counted at 48 kHz whatever the output rate.
+        let skip =
+            usize::from(u16::from_le_bytes([head[2], head[3]])) * rate as usize / RATE as usize;
         let layout = match channels {
             1 => opus::Channels::Mono,
             2 => opus::Channels::Stereo,
             other => return Err(format!("{other} channels")),
         };
-        let decoder = opus::Decoder::new(RATE, layout).map_err(|error| error.to_string())?;
+        let decoder = opus::Decoder::new(rate, layout).map_err(|error| error.to_string())?;
         Ok(Self {
             decoder,
             channels,
@@ -306,6 +315,22 @@ mod tests {
         let end = decoded.len().min(original.len());
         let (before, after) = (rms(&original[4800..end]), rms(&decoded[4800..end]));
         assert!((before - after).abs() < 0.08, "{before} in, {after} out");
+    }
+
+    #[test]
+    fn a_clip_decodes_at_the_rate_speech_recognition_wants() {
+        let original = tone(1.0);
+        let bytes = encode(&original).expect("encodes");
+        let decoded = decode_at(&bytes, 16_000).expect("decodes");
+        let expected = original.len() as i64 / 3;
+        let drift = decoded.len() as i64 - expected;
+        assert!(
+            drift.abs() <= FRAME as i64 / 3,
+            "{} samples back",
+            decoded.len()
+        );
+        let end = decoded.len().min(original.len() / 3);
+        assert!((rms(&decoded[1600..end]) - rms(&original[4800..])).abs() < 0.08);
     }
 
     /// Some phones write a second beginning-of-stream page in the middle of
