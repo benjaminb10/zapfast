@@ -614,7 +614,11 @@ fn native_options(
     let default_size = demo_size_arg().unwrap_or([1180.0, 780.0]);
     let demo = demo_persistence.is_some();
     let viewport = egui::ViewportBuilder::default()
-        .with_title(if demo { "ZapFast Demo" } else { "ZapFast" })
+        .with_title(if demo {
+            "ZapFast Demo".to_owned()
+        } else {
+            paths::window_title()
+        })
         .with_app_id(if demo {
             "zapfast-demo".to_owned()
         } else {

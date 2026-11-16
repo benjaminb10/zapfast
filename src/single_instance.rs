@@ -103,15 +103,20 @@ pub fn acquire(dir: &Path, waker: &crate::backend::Waker, verb: &str) -> Outcome
     // A copy from before the lock only knows `show` and `ping`. Anything else
     // asked of one surfaces its window rather than running a second ZapFast
     // beside it.
+    // A second profile has its own lock and leaves the shared legacy port to
+    // the main profile, which it must run beside.
+    let profiled = crate::paths::profile().is_some();
     let legacy = legacy_verb(verb);
-    if legacy_instance_answers(legacy) {
+    if !profiled && legacy_instance_answers(legacy) {
         return if legacy == verb {
             Outcome::Surfaced
         } else {
             Outcome::Outdated
         };
     }
-    listen_legacy(Arc::clone(&commands), waker.clone());
+    if !profiled {
+        listen_legacy(Arc::clone(&commands), waker.clone());
+    }
     Outcome::Only(Guard {
         commands,
         _claim: claim,
@@ -182,7 +187,9 @@ pub enum Sent {
 /// Sends one request to the running copy, without becoming it when there is
 /// none: for a command-line action that only makes sense while ZapFast runs.
 pub fn send(dir: &Path, verb: &str) -> Sent {
-    sent(slot(dir).send(verb).map(drop), legacy_instance_answers_ping)
+    sent(slot(dir).send(verb).map(drop), || {
+        crate::paths::profile().is_none() && legacy_instance_answers_ping()
+    })
 }
 
 /// Reads the result of a request. A copy from before the lock is asked

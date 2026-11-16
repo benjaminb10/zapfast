@@ -429,11 +429,17 @@ const MACOS_BUNDLE_ID: &str = "me.paolino.fastsapp";
 /// mismatch leaves the app out of Notification Center: no banners, no sound,
 /// and no Dock badge. Elsewhere it is the app id the desktop entry and the
 /// Windows shortcuts use.
-fn notification_app_id() -> &'static str {
-    if cfg!(target_os = "macos") {
+fn notification_app_id() -> String {
+    let base = if cfg!(target_os = "macos") {
         MACOS_BUNDLE_ID
     } else {
         "me.paolino.zapfast"
+    };
+    // A second profile is its own app bundle (`<id>.<profile>`), so its
+    // notifications carry its name and a click opens that app.
+    match crate::paths::profile() {
+        Some(profile) => format!("{base}.{profile}"),
+        None => base.to_owned(),
     }
 }
 
@@ -459,7 +465,7 @@ fn deliver(
     };
     let client = match CLIENT.get_or_init(|| {
         Client::new(
-            App::new(notification_app_id(), "ZapFast")
+            App::new(notification_app_id(), crate::paths::window_title())
                 .desktop_entry("zapfast")
                 .icon("zapfast")
                 // ZapFast's green, the theme's accent, behind the logo on

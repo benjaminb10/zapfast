@@ -20,7 +20,7 @@ pub struct AppDirs {
 
 impl AppDirs {
     pub fn discover() -> Self {
-        match Self::of("zapfast") {
+        match Self::of(&app_name()) {
             Some(dirs) => dirs,
             None => {
                 let fallback = std::env::current_dir().unwrap_or_default();
@@ -52,6 +52,10 @@ impl AppDirs {
     /// Adopts earlier names, newest first, without replacing existing data.
     /// Call only after acquiring the instance guard, and never for demo runs.
     pub fn adopt_previous_names(&self) -> std::io::Result<()> {
+        // A second profile starts empty: earlier names belong to the main one.
+        if profile().is_some() {
+            return Ok(());
+        }
         for name in ["fastsapp", "fastwhatsapp"] {
             if let Some(old) = Self::of(name) {
                 self.adopt(&old)?;
@@ -406,6 +410,40 @@ fn restrict_directory(path: &Path) -> std::io::Result<()> {
 #[cfg(not(unix))]
 fn restrict_directory(_path: &Path) -> std::io::Result<()> {
     Ok(())
+}
+
+/// Optional second profile from `ZAPFAST_PROFILE`, such as `pro`: its own
+/// data, keys, instance lock, and window, so two numbers can run as two apps.
+/// Only lowercase letters, digits, and hyphens are kept.
+pub fn profile() -> Option<String> {
+    let raw = std::env::var("ZAPFAST_PROFILE").ok()?;
+    let name: String = raw
+        .trim()
+        .to_lowercase()
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric() || *c == '-')
+        .collect();
+    (!name.is_empty()).then_some(name)
+}
+
+/// Directory name of the active profile: `zapfast` or `zapfast-<profile>`.
+pub fn app_name() -> String {
+    match profile() {
+        Some(profile) => format!("zapfast-{profile}"),
+        None => "zapfast".to_owned(),
+    }
+}
+
+/// Window title of the active profile: `ZapFast` or `ZapFast Pro`.
+pub fn window_title() -> String {
+    match profile() {
+        Some(profile) => {
+            let mut chars = profile.chars();
+            let first = chars.next().map(|c| c.to_ascii_uppercase()).unwrap_or_default();
+            format!("ZapFast {first}{}", chars.as_str())
+        }
+        None => "ZapFast".to_owned(),
+    }
 }
 
 /// Private directory for the instance lock and control channel. Uses
