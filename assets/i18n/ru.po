@@ -2950,7 +2950,7 @@ msgstr "Сохранение…"
 
 #: src/ui/picker.rs:1157 src/ui/mod.rs:656
 msgid "Retry"
-msgstr ""
+msgstr "Повторить"
 
 #: src/ui/picker.rs:1159
 msgid "Load more"

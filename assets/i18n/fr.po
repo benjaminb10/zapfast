@@ -2949,7 +2949,7 @@ msgstr "Enregistrement…"
 
 #: src/ui/picker.rs:1157 src/ui/mod.rs:656
 msgid "Retry"
-msgstr ""
+msgstr "Réessayer"
 
 #: src/ui/picker.rs:1159
 msgid "Load more"
@@ -4167,3 +4167,7 @@ msgstr "Transcrire automatiquement les messages vocaux"
 #: src/ui/settings.rs
 msgid "On this computer, as they arrive. The first one downloads the speech model (574 MB)."
 msgstr "Sur cet ordinateur, dès leur arrivée. Le premier télécharge le modèle vocal (574 Mo)."
+
+#: src/ui/conversation.rs
+msgid "This message could not be sent. Click to send it again."
+msgstr "Ce message n’a pas pu être envoyé. Cliquez pour le renvoyer."

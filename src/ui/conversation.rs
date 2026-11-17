@@ -6645,15 +6645,7 @@ fn footer_over_picture(
         );
         ui.painter().galley(label.min, failed, Color32::WHITE);
         let status = Rect::from_min_max(label.min, pos2(row.right(), label.max.y));
-        let response = ui.interact(
-            status,
-            ui.id().with(("not-sent", &message.id)),
-            Sense::hover(),
-        );
-        response.widget_info(|| {
-            egui::WidgetInfo::labeled(egui::WidgetType::Label, true, NOT_SENT_HINT)
-        });
-        response.on_hover_text(NOT_SENT_HINT);
+        not_sent_label(ui, view, message, status, actions);
     }
     if pinned {
         x -= FOOTER_MARK_SLOT;
@@ -6727,6 +6719,44 @@ fn status_opens_info(
             chat: message.chat.clone(),
             message: message.id.clone(),
         }));
+    }
+}
+
+/// The "Not sent" label and the clock beside it. On a text message a click
+/// sends it again, as the menu's Retry does; on anything else it explains on
+/// hover and to screen readers, and hovering takes no clicks from the bubble.
+fn not_sent_label(
+    ui: &mut egui::Ui,
+    view: &View<'_>,
+    message: &Message,
+    status: Rect,
+    actions: &mut Vec<Action>,
+) {
+    let id = ui.id().with(("not-sent", &message.id));
+    if !message.can_retry() {
+        let response = ui.interact(status, id, Sense::hover());
+        response.widget_info(|| {
+            egui::WidgetInfo::labeled(egui::WidgetType::Label, true, NOT_SENT_HINT)
+        });
+        response.on_hover_text(NOT_SENT_HINT);
+        return;
+    }
+    // The button's name says what failed as well as what a click does.
+    let hint = crate::i18n::gettext(
+        view.locale,
+        "This message could not be sent. Click to send it again.",
+    );
+    let response = ui.interact(status, id, Sense::click());
+    response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, &hint));
+    if response
+        .on_hover_cursor(egui::CursorIcon::PointingHand)
+        .on_hover_text(&*hint)
+        .clicked()
+    {
+        actions.push(Action::RetrySend {
+            chat: message.chat.clone(),
+            id: message.id.clone(),
+        });
     }
 }
 
@@ -6827,18 +6857,8 @@ fn footer(
             failed.size(),
         );
         ui.painter().galley(label.min, failed, palette.text);
-        // Explain on hover and to screen readers; hovering takes no clicks
-        // from the bubble.
         let status = Rect::from_min_max(label.min, pos2(rect.right(), label.max.y));
-        let response = ui.interact(
-            status,
-            ui.id().with(("not-sent", &message.id)),
-            Sense::hover(),
-        );
-        response.widget_info(|| {
-            egui::WidgetInfo::labeled(egui::WidgetType::Label, true, NOT_SENT_HINT)
-        });
-        response.on_hover_text(NOT_SENT_HINT);
+        not_sent_label(ui, view, message, status, actions);
     }
     if starred {
         x -= FOOTER_MARK_SLOT;
@@ -7044,6 +7064,7 @@ pub(crate) fn menu_width(
 fn message_menu_labels(locale: crate::i18n::Locale) -> Vec<String> {
     use crate::i18n::gettext;
     [
+        gettext(locale, "Retry"),
         gettext(locale, "Reply"),
         gettext(locale, "Reply privately"),
         gettext(locale, "Star"),
@@ -7375,6 +7396,18 @@ fn context_menu(
         first.get_or_insert(response.id);
         response.clicked()
     };
+    if message.can_retry()
+        && item(
+            ui,
+            Icon::Refresh,
+            &crate::i18n::gettext(view.locale, "Retry"),
+        )
+    {
+        actions.push(Action::RetrySend {
+            chat: chat.clone(),
+            id: message.id.clone(),
+        });
+    }
     if can_reply(&message.content)
         && item(ui, Icon::Reply, &crate::i18n::gettext(view.locale, "Reply"))
     {
@@ -13594,8 +13627,9 @@ mod reaction_tests {
     }
 
     /// Rows whose menus between them show every entry a list row can: our
-    /// own fresh delivered text, starred and pinned, photos with and without
-    /// their file and one downloading, a video and a sticker.
+    /// own text that failed to send, our own fresh delivered text, starred
+    /// and pinned, photos with and without their file and one downloading, a
+    /// video and a sticker.
     fn menu_fixtures(file: &Path) -> Vec<MenuRow> {
         use MediaState::{Downloading, Idle};
         let mut own = with_reactions(Vec::new());
@@ -13628,7 +13662,15 @@ mod reaction_tests {
                 motion: None,
             })
         };
+        let mut failed = own.clone();
+        failed.id = "failed".into();
+        failed.status = Delivery::Failed;
         vec![
+            MenuRow {
+                message: failed,
+                marks: Marks { starred: false },
+                pinned: false,
+            },
             MenuRow {
                 message: own,
                 marks: Marks { starred: true },
@@ -13685,6 +13727,39 @@ mod reaction_tests {
                 "{spanish} in {labels:?}"
             );
         }
+    }
+
+    #[test]
+    fn only_a_failed_text_offers_retry() {
+        let mut message = with_reactions(Vec::new());
+        message.from_me = true;
+        message.status = Delivery::Failed;
+        let row = |message: &Message| MenuRow {
+            message: message.clone(),
+            marks: Marks { starred: false },
+            pinned: false,
+        };
+        let offers = |message: &Message| {
+            drawn_menu_words(crate::i18n::Locale::English, &row(message))
+                .iter()
+                .any(|label| label == "Retry")
+        };
+        assert!(offers(&message));
+        assert!(
+            drawn_menu_words(crate::i18n::Locale::French, &row(&message))
+                .iter()
+                .any(|label| label == "Réessayer")
+        );
+        message.status = Delivery::Sent;
+        assert!(!offers(&message));
+        message.status = Delivery::Failed;
+        message.content = Content::Location {
+            latitude: 0.0,
+            longitude: 0.0,
+            name: None,
+            address: None,
+        };
+        assert!(!offers(&message));
     }
 
     #[test]

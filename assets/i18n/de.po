@@ -2946,7 +2946,7 @@ msgstr "Wird gespeichert…"
 
 #: src/ui/picker.rs:1157 src/ui/mod.rs:656
 msgid "Retry"
-msgstr ""
+msgstr "Erneut versuchen"
 
 #: src/ui/picker.rs:1159
 msgid "Load more"

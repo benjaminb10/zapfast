@@ -121,6 +121,13 @@ when an acknowledgement was lost. Unlinking clears those requests. Confirmed
 deletions whose local cleanup failed are repaired on restart or reconnect
 without another network request. Neither deletion can be undone.
 
+A message that failed to send is marked **Not sent**. **Delete for me**
+removes it from this computer at once, even offline, since WhatsApp never had
+it. For a text message, click **Not sent** or choose **Retry** from its menu to
+send it again, with its quote and mentions: the text goes as a new message and
+the failed copy is removed. ZapFast never resends anything on its own, and
+other kinds of messages are sent again by hand.
+
 To delete several messages at once, select them (see
 [Selecting messages](#selecting-messages)) and choose **Delete…** in the bar
 under the chat, or right-click any selected message. **Delete for everyone** is

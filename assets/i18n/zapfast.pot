@@ -3896,3 +3896,7 @@ msgstr ""
 #: src/ui/settings.rs
 msgid "On this computer, as they arrive. The first one downloads the speech model (574 MB)."
 msgstr ""
+
+#: src/ui/conversation.rs
+msgid "This message could not be sent. Click to send it again."
+msgstr ""

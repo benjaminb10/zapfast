@@ -11309,6 +11309,15 @@ impl Worker {
                 return;
             }
         }
+        // Our message that failed to send never reached WhatsApp: there is
+        // nothing to delete there, so only our copy goes, even offline.
+        if let Ok(Some(message)) = self.archive.message(&chat, &id)
+            && message.from_me
+            && message.status == Delivery::Failed
+        {
+            self.delete_message_here(&chat, &id);
+            return;
+        }
         let (Some(client), Some(jid)) = (self.client.clone(), Self::jid_of(&chat)) else {
             self.emit(Event::Error(
                 "Connect to WhatsApp to delete this message".to_owned(),
@@ -26279,6 +26288,33 @@ mod chat_removal_tests {
 
         worker.apply_history(history(CHAT, &[300]), false);
         assert_eq!(stored(&worker, CHAT), ["m300"]);
+    }
+
+    #[tokio::test]
+    /// WhatsApp never had our failed message, so deleting it needs no sync
+    /// and works offline.
+    async fn a_failed_own_message_is_deleted_here_alone() {
+        let (mut worker, events, _, _) = receipt_tests::worker();
+        worker.apply_history(history(CHAT, &[100]), true);
+        let mut failed = crate::archive::tests::message(CHAT, "failed", 200, true);
+        failed.status = Delivery::Failed;
+        worker.store_message(failed, None, None);
+        assert_eq!(stored(&worker, CHAT), ["m100", "failed"]);
+        let _ = events.try_iter().count();
+        worker
+            .handle_command(Command::DeleteLocal {
+                chat: CHAT.into(),
+                id: "failed".into(),
+            })
+            .await;
+        assert_eq!(stored(&worker, CHAT), ["m100"]);
+        let events: Vec<Event> = events.try_iter().collect();
+        assert!(
+            events
+                .iter()
+                .any(|event| matches!(event, Event::MessageDeleted { id, .. } if id == "failed"))
+        );
+        assert!(!events.iter().any(|event| matches!(event, Event::Error(_))));
     }
 
     #[tokio::test]

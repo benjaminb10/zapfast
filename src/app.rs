@@ -6726,6 +6726,63 @@ impl App {
             .is_some_and(|(selected, _)| selected == chat)
     }
 
+    /// Sends a text message that failed again, with its quote, mentions and
+    /// link preview, under a new id, then deletes the failed copy. Offline it
+    /// says so and keeps the failed message.
+    fn retry_send(&mut self, chat: ChatId, id: String) {
+        let Some(message) = self
+            .conversations
+            .get(&chat)
+            .and_then(|conversation| conversation.message(&id))
+            .filter(|message| message.can_retry())
+        else {
+            return;
+        };
+        if !self.is_connected() {
+            self.toast_error(crate::i18n::gettext(
+                self.locale,
+                "Not sent: ZapFast is not connected to WhatsApp.",
+            ));
+            return;
+        }
+        let Content::Text { text, preview } = &message.content else {
+            return;
+        };
+        let text = text.clone();
+        let preview = preview
+            .clone()
+            .map(|preview| crate::model::ComposedPreview {
+                preview,
+                thumbnail: message.thumbnail.clone(),
+            });
+        let quoting = message
+            .quoted
+            .as_ref()
+            .map(|quoted| crate::model::ReplyTarget {
+                id: quoted.id.clone(),
+                chat: quoted.chat.clone(),
+            });
+        // Mentioning everyone comes back from the text's own token.
+        let mentions = message
+            .mentions
+            .iter()
+            .filter(|mention| !crate::mentions::is_everyone(mention))
+            .map(|mention| mention.id.clone())
+            .collect();
+        self.send_failures.remove(&(chat.clone(), id.clone()));
+        self.backend.send(Command::SendText {
+            chat: chat.clone(),
+            text,
+            quoting,
+            mentions,
+            preview,
+        });
+        // The worker removes a failed copy without asking WhatsApp, which
+        // never had it.
+        self.backend.send(Command::DeleteLocal { chat, id });
+        self.follow_outgoing();
+    }
+
     /// Keeps following outgoing messages only when the reader was already at
     /// the newest edge. Sending from older history must not lose their place.
     fn follow_outgoing(&mut self) {
@@ -7512,6 +7569,7 @@ impl App {
         }
         let destination = match &action {
             Action::SendText { chat, .. }
+            | Action::RetrySend { chat, .. }
             | Action::SendLocation { chat, .. }
             | Action::ReplyInteractive { chat, .. }
             | Action::CreatePoll { chat, .. }
@@ -8566,6 +8624,7 @@ impl App {
                 self.forget_star(&chat, &id);
                 self.backend.send(Command::Revoke { chat, id });
             }
+            Action::RetrySend { chat, id } => self.retry_send(chat, id),
             Action::DeleteForMe { chat, id } => {
                 // The message stays until WhatsApp accepts the deletion.
                 // `Event::MessageDeleted` removes it and prunes the selection.
@@ -21538,6 +21597,100 @@ mod tests {
             app.apply(send, &ctx);
             assert!(app.scroll_chats_to_top, "{name} scrolls the list up");
         }
+    }
+
+    #[test]
+    fn retry_sends_a_failed_text_again_and_drops_the_failed_copy() {
+        let root = tempfile::tempdir().unwrap();
+        let (mut app, _) = App::headless(AppDirs::under(root.path()), Settings::default());
+        let (backend, mut commands) = Backend::recording();
+        app.backend = backend;
+        let ctx = egui::Context::default();
+        let chat = "group@g.us";
+        app.chats.push(Chat::new(chat.into(), "Group".into()));
+        let mut failed = message(chat, "failed", 100);
+        failed.from_me = true;
+        failed.status = Delivery::Failed;
+        failed.content = Content::text("hello @15550000002");
+        failed.quoted = Some(crate::model::Quoted {
+            chat: None,
+            id: "original".into(),
+            sender: "15550000003@s.whatsapp.net".into(),
+            sender_name: None,
+            summary: "earlier".into(),
+            labelled: None,
+            mentions: Vec::new(),
+        });
+        failed.mentions = vec![crate::model::MentionRef {
+            user: "15550000002".into(),
+            id: "15550000002@s.whatsapp.net".into(),
+        }];
+        crate::mentions::push_everyone(&mut failed.mentions);
+        let mut photo = message(chat, "photo", 101);
+        photo.from_me = true;
+        photo.status = Delivery::Failed;
+        photo.content = Content::Image {
+            caption: None,
+            media: Media {
+                mime: "image/jpeg".into(),
+                size: 1,
+                width: None,
+                height: None,
+                album: None,
+                path: None,
+                state: MediaState::Idle,
+            },
+            motion: None,
+        };
+        app.conversations.insert(
+            chat.into(),
+            Conversation {
+                messages: vec![failed, photo],
+                ..Default::default()
+            },
+        );
+        app.send_failures
+            .insert((chat.into(), "failed".into()), "timed out".into());
+        let retry = |id: &str| Action::RetrySend {
+            chat: chat.into(),
+            id: id.into(),
+        };
+
+        // Offline, the failed message stays and the reader is told why.
+        app.apply(retry("failed"), &ctx);
+        assert!(commands.try_recv().is_err(), "nothing is sent offline");
+        assert_eq!(
+            error_toasts(&app),
+            ["Not sent: ZapFast is not connected to WhatsApp."]
+        );
+
+        app.link = LinkStatus::Connected;
+        // Only text is sent again; a photo is not.
+        app.apply(retry("photo"), &ctx);
+        assert!(commands.try_recv().is_err(), "a failed photo is left alone");
+
+        app.apply(retry("failed"), &ctx);
+        match commands.try_recv().expect("the text goes again") {
+            Command::SendText {
+                chat: to,
+                text,
+                quoting,
+                mentions,
+                preview,
+            } => {
+                assert_eq!(to, chat);
+                assert_eq!(text, "hello @15550000002");
+                assert_eq!(quoting.map(|quote| quote.id), Some("original".into()));
+                assert_eq!(mentions, ["15550000002@s.whatsapp.net"]);
+                assert!(preview.is_none());
+            }
+            other => panic!("expected the text, got {other:?}"),
+        }
+        assert!(matches!(
+            commands.try_recv(),
+            Ok(Command::DeleteLocal { chat: from, id }) if from == chat && id == "failed"
+        ));
+        assert!(app.send_failures.is_empty());
     }
 
     #[test]

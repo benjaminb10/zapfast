@@ -632,6 +632,14 @@ pub struct ComposedPreview {
 }
 
 impl Message {
+    /// Whether this is our text message that failed to send, which Retry
+    /// sends again. Media and other kinds are sent again by hand.
+    pub fn can_retry(&self) -> bool {
+        self.from_me
+            && self.status == Delivery::Failed
+            && matches!(self.content, Content::Text { .. })
+    }
+
     /// Whether WhatsApp also holds this row under an id it can be named by. A
     /// send still pending or failed here may never have reached it, and a
     /// disappearing-timer notice is filed under an id it never issued. Neither
@@ -2800,6 +2808,12 @@ pub enum Action {
         text: String,
         /// Quoted message id.
         quoting: Option<crate::model::ReplyTarget>,
+    },
+    /// Sends our failed text message `id` again as a new message, then
+    /// removes the failed copy.
+    RetrySend {
+        chat: ChatId,
+        id: String,
     },
     /// Sends a spot as a location message.
     SendLocation {

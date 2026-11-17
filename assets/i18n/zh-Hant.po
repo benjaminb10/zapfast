@@ -2841,7 +2841,7 @@ msgstr "儲存中…"
 
 #: src/ui/picker.rs:1157 src/ui/mod.rs:656
 msgid "Retry"
-msgstr ""
+msgstr "重試"
 
 #: src/ui/picker.rs:1159
 msgid "Load more"
