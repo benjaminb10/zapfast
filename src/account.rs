@@ -142,6 +142,9 @@ pub struct Account {
     /// Chats whose disappearing-timer change is on its way to WhatsApp. The
     /// control stays disabled and the old timer stays visible until it lands.
     pub timer_saving: HashSet<ChatId>,
+    /// Why each of our messages that failed to send failed, by chat and id,
+    /// for this run only.
+    pub send_failures: HashMap<(ChatId, String), String>,
     pub(crate) reported_online: Option<bool>,
     /// Chats this account may pin; WhatsApp Plus raises it once known.
     pub pin_limit: usize,
@@ -262,6 +265,7 @@ impl Account {
             interactive_sending: HashSet::new(),
             group_saving: HashSet::new(),
             timer_saving: HashSet::new(),
+            send_failures: HashMap::new(),
             reported_online: None,
             pin_limit: crate::backend::PINNED_CHATS,
             call_log: Vec::new(),

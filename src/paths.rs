@@ -251,6 +251,12 @@ impl AppDirs {
         self.state.join("zapfast.log")
     }
 
+    /// Errors the window showed, one timestamped line each, kept across runs.
+    /// Past 1 MB it moves to `errors.previous.log` and starts over.
+    pub fn errors_file(&self) -> PathBuf {
+        self.state.join("errors.log")
+    }
+
     /// Panic log written before process exit.
     pub fn panic_log(&self) -> PathBuf {
         self.state.join("panic.log")

@@ -327,6 +327,9 @@ fn run() -> eframe::Result<()> {
     logging
         .init()
         .map_err(|error| eframe::Error::AppCreation(error.into()))?;
+    if !demo {
+        zapfast::diagnostics::set_error_journal(dirs.errors_file());
+    }
     // Moving a single-account setup into its account folder needs the
     // keyring; when it cannot finish, the log says why.
     if !demo && let Err(error) = dirs.adopt_single_account() {

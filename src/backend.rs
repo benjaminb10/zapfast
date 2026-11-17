@@ -1650,6 +1650,14 @@ pub enum Event {
         failure: ArchiveFailure,
     },
     Error(String),
+    /// Our message `id` in `chat` failed to send, and why. The worker also
+    /// reports it as an [`Event::Error`]; this keeps the reason with the
+    /// message.
+    SendFailed {
+        chat: ChatId,
+        id: String,
+        reason: String,
+    },
     /// A change to a group's name or photo went to WhatsApp (`saving`), or
     /// WhatsApp answered it.
     GroupSaving {

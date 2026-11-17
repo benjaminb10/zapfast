@@ -9085,6 +9085,11 @@ impl Worker {
                 self.emit_chat(&chat);
                 self.advance_serial_forward(&id);
                 if let Some(error) = error {
+                    self.emit(Event::SendFailed {
+                        chat: chat.clone(),
+                        id: id.clone(),
+                        reason: error.clone(),
+                    });
                     self.emit(Event::Error(format!("Message not sent: {error}")));
                 }
             }

@@ -286,9 +286,129 @@ pub fn is_protocol_target(target: &str) -> bool {
         || module == "waproto"
 }
 
+/// The longest error text the journal and the log keep, in characters.
+const ERROR_TEXT_LIMIT: usize = 500;
+/// The size past which the journal starts over, keeping one previous file.
+const ERROR_JOURNAL_LIMIT: u64 = 1024 * 1024;
+
+static ERROR_JOURNAL: std::sync::OnceLock<std::path::PathBuf> = std::sync::OnceLock::new();
+
+/// Sets the file every shown error is appended to. Called once at startup;
+/// demo runs leave it unset, so they write nothing.
+pub fn set_error_journal(path: std::path::PathBuf) {
+    let _ = ERROR_JOURNAL.set(path);
+}
+
+/// Makes an error shown in the window safe to keep on disk: one line, every
+/// run of six or more digits (phone numbers, JIDs) masked, and at most
+/// [`ERROR_TEXT_LIMIT`] characters.
+pub fn sanitize_error(text: &str) -> String {
+    let mut out = String::with_capacity(text.len().min(ERROR_TEXT_LIMIT * 4));
+    let mut digits = String::new();
+    let flush = |digits: &mut String, out: &mut String| {
+        if digits.chars().count() >= 6 {
+            out.push('…');
+        } else {
+            out.push_str(digits);
+        }
+        digits.clear();
+    };
+    for c in text.chars() {
+        if c.is_ascii_digit() {
+            digits.push(c);
+            continue;
+        }
+        flush(&mut digits, &mut out);
+        out.push(if c.is_control() { ' ' } else { c });
+    }
+    flush(&mut digits, &mut out);
+    let out = out.trim();
+    match out.char_indices().nth(ERROR_TEXT_LIMIT) {
+        Some((end, _)) => out[..end].to_owned(),
+        None => out.to_owned(),
+    }
+}
+
+/// Records an error the window shows: in the log at warn level and, outside
+/// demo runs, as a timestamped line in the error journal. Best effort: a
+/// failure to write is ignored.
+pub fn record_shown_error(text: &str) {
+    let clean = sanitize_error(text);
+    log::warn!("error shown: {clean}");
+    if let Some(path) = ERROR_JOURNAL.get() {
+        let line = format!("{} {clean}\n", jiff::Timestamp::now());
+        let _ = append_journal(path, &line, ERROR_JOURNAL_LIMIT);
+    }
+}
+
+/// Appends `line` to the journal at `path`, first moving a file larger than
+/// `limit` aside as `errors.previous.log`. The file is private to the user.
+fn append_journal(path: &std::path::Path, line: &str, limit: u64) -> std::io::Result<()> {
+    use std::io::Write;
+
+    if std::fs::metadata(path).is_ok_and(|meta| meta.len() > limit) {
+        std::fs::rename(path, path.with_file_name("errors.previous.log"))?;
+    }
+    let mut options = std::fs::OpenOptions::new();
+    options.create(true).append(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    let mut file = options.open(path)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        file.set_permissions(std::fs::Permissions::from_mode(0o600))?;
+    }
+    file.write_all(line.as_bytes())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn shown_errors_lose_numbers_and_length() {
+        assert_eq!(
+            sanitize_error("Message not sent: 33612345678@s.whatsapp.net timed out"),
+            "Message not sent: …@s.whatsapp.net timed out"
+        );
+        // Short numbers such as status codes stay readable.
+        assert_eq!(
+            sanitize_error("HTTP 503 after 12345"),
+            "HTTP 503 after 12345"
+        );
+        assert_eq!(sanitize_error("lid 123456789012345@lid"), "lid …@lid");
+        assert_eq!(sanitize_error("two\nlines"), "two lines");
+        let long = "é".repeat(800);
+        assert_eq!(sanitize_error(&long).chars().count(), ERROR_TEXT_LIMIT);
+    }
+
+    #[test]
+    fn the_error_journal_rotates_past_its_limit() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("errors.log");
+        let previous = directory.path().join("errors.previous.log");
+        append_journal(&path, "first\n", 10).unwrap();
+        append_journal(&path, "second\n", 10).unwrap();
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "first\nsecond\n");
+        assert!(!previous.exists());
+        // Over the limit: the full file moves aside before the next line.
+        append_journal(&path, "third\n", 10).unwrap();
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "third\n");
+        assert_eq!(
+            std::fs::read_to_string(&previous).unwrap(),
+            "first\nsecond\n"
+        );
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mode = std::fs::metadata(&path).unwrap().permissions().mode();
+            assert_eq!(mode & 0o777, 0o600);
+        }
+    }
 
     const SW: &str = "https://web.whatsapp.com/sw.js";
 

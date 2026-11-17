@@ -24,6 +24,7 @@ On Linux:
 | Last run's log | `~/.local/state/zapfast/zapfast.log` | `--verbose` for more |
 | The run before's log | `~/.local/state/zapfast/zapfast.previous.log` | Kept for one more start |
 | Crash log | `~/.local/state/zapfast/panic.log` | Safe to delete |
+| Error journal | `~/.local/state/zapfast/errors.log` | Every error the window showed, kept across runs; safe to delete |
 
 Back up the archive if you need its history. WhatsApp sends only recent
 history to a new device, although ZapFast can request some older messages from
@@ -362,6 +363,12 @@ message contents, phone numbers, or keys. Include the end of this file when
 reporting an issue. **Settings > Files > Log > Open** shows it. The run before
 is kept beside it as `zapfast.previous.log`: if ZapFast froze and you had to
 restart it, that file holds what happened.
+
+Every error ZapFast shows in the window is also written to the log (as
+`error shown: …`) and appended to `errors.log` beside it, one timestamped line
+each, so an error you missed can still be read later. That file is kept
+across runs; past 1 MB it moves to `errors.previous.log` and starts over. Runs
+of six or more digits are masked and each line is cut to 500 characters.
 
 During a call the log also records the call's numbers every few seconds: the
 video rate, loss and keyframes in each direction, and the audio devices'

@@ -5074,6 +5074,11 @@ impl App {
                 };
                 self.toast_error(shown);
             }
+            Event::SendFailed { chat, id, reason } => {
+                // The toast comes with the Event::Error that follows; this
+                // keeps the reason for the message itself.
+                self.send_failures.insert((chat, id), reason);
+            }
             Event::HistoryUnavailable { chat, error } => {
                 // The replied message's own request, asked before this
                 // answer came, failed: its wait ends, and the error alone is
@@ -5274,6 +5279,7 @@ impl App {
                 // is discarded, so nothing else would clear this.
                 self.group_saving.clear();
                 self.timer_saving.clear();
+                self.send_failures.clear();
                 self.open_chat = None;
                 // Every recorded place named a chat of the account that just
                 // went away, but only when that account is the one on screen.
@@ -10460,7 +10466,9 @@ impl App {
         let message = message.into();
         let said = self.toast_said(&message);
         self.announcer.say(crate::announcer::Category::Error, said);
-        log::warn!("an operation failed; details are shown in the window");
+        // The toast can be missed; the log and the error journal keep a
+        // sanitized copy of what it said.
+        crate::diagnostics::record_shown_error(&message);
         // Errors stay until dismissed: a repeat moves to the end instead of
         // stacking, and only the newest few are kept.
         self.toasts
@@ -20030,6 +20038,36 @@ mod tests {
         app.handle_events();
         assert!(app.chat_pins.get(chat).is_some_and(Vec::is_empty));
         assert!(app.pins.get(chat).is_some_and(HashSet::is_empty));
+    }
+
+    #[test]
+    fn a_failed_send_keeps_its_reason_with_the_message() {
+        let mut app = app();
+        let (backend, events) = Backend::detached();
+        app.backend = backend;
+        let chat = "1@s.whatsapp.net";
+        events
+            .send(Event::SendFailed {
+                chat: chat.into(),
+                id: "m1".into(),
+                reason: "server refused".into(),
+            })
+            .unwrap();
+        events
+            .send(Event::Error("Message not sent: server refused".into()))
+            .unwrap();
+        app.handle_events();
+        assert_eq!(
+            app.send_failures
+                .get(&(chat.to_owned(), "m1".to_owned()))
+                .map(String::as_str),
+            Some("server refused")
+        );
+        assert!(
+            app.toasts
+                .iter()
+                .any(|toast| toast.message == "Message not sent: server refused")
+        );
     }
 
     #[test]
