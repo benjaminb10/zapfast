@@ -271,7 +271,7 @@ impl Worker {
         // others while it runs.
         let devices = self.emit_call_devices().await;
         let camera = video
-            .then(|| calls::default_camera(&devices, None))
+            .then(|| calls::default_camera(&devices, self.preferred_camera_id(&devices)))
             .flatten();
         let placed = Call::place(
             &client,
@@ -342,7 +342,7 @@ impl Worker {
         };
         let devices = self.emit_call_devices().await;
         let camera = video
-            .then(|| calls::default_camera(&devices, None))
+            .then(|| calls::default_camera(&devices, self.preferred_camera_id(&devices)))
             .flatten();
         let (done, answers) = async_channel::bounded(1);
         let placed = Call::place_group(
@@ -425,7 +425,7 @@ impl Worker {
         };
         let devices = self.emit_call_devices().await;
         let camera = video
-            .then(|| calls::default_camera(&devices, None))
+            .then(|| calls::default_camera(&devices, self.preferred_camera_id(&devices)))
             .flatten();
         let (done, answers) = async_channel::bounded(1);
         let joined =
@@ -475,14 +475,16 @@ impl Worker {
         let Some(client) = self.client.clone() else {
             return;
         };
+        let preferred = self.preferred_camera.clone();
         let update = match self.call.as_mut() {
             Some(runtime) => {
                 // Whatever the user picked while the phone was ringing is what the media binds to,
                 // checked against the machine so one that vanished falls back rather than opening a
-                // stream that can never deliver.
+                // stream that can never deliver. No camera picked yet: the one from earlier calls.
                 let (microphone, speaker, camera) = runtime.call.selections();
-                let resolved =
-                    calls::resolve_devices(&discover_devices().await, microphone, speaker, camera);
+                let devices = discover_devices().await;
+                let camera = camera.or_else(|| calls::camera_named(&devices, preferred.as_deref()));
+                let resolved = calls::resolve_devices(&devices, microphone, speaker, camera);
                 let answered = runtime
                     .call
                     .answer(
@@ -559,12 +561,13 @@ impl Worker {
     }
 
     pub(super) async fn set_call_camera(&mut self, on: bool) {
+        let preferred = self.preferred_camera_id(&self.call_devices);
         let outcome = match self.call.as_mut() {
             Some(runtime) => {
                 if on && !runtime.call.is_video() {
                     // A voice call: ask the peer for video, or answer the peer who asked, and start
                     // draining the frames it brings, from the machine's own camera.
-                    let camera = calls::default_camera(&self.call_devices, None);
+                    let camera = calls::default_camera(&self.call_devices, preferred);
                     match runtime.call.upgrade_to_video(camera).await {
                         Ok(frames) => {
                             if frames.is_some() {
@@ -607,6 +610,11 @@ impl Worker {
         if let Some(update) = update {
             self.emit_call(update);
         }
+    }
+
+    /// The camera picked in an earlier call, found again among `devices` by its name.
+    fn preferred_camera_id(&self, devices: &calls::DeviceList) -> Option<String> {
+        calls::camera_named(devices, self.preferred_camera.as_deref())
     }
 
     pub(super) async fn set_call_camera_device(&mut self, device: Option<String>) {

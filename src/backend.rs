@@ -567,6 +567,8 @@ pub enum Command {
     SetCallSpeaker(Option<String>),
     /// Switches the current call's camera node.
     SetCallCameraDevice(Option<String>),
+    /// The camera the user picked last time, by name, for the next call to open first.
+    SetPreferredCamera(Option<String>),
     /// Lists the microphones, speakers and cameras the call screen offers.
     RefreshCallDevices,
     /// Reads the account's call entries for the Calls page.

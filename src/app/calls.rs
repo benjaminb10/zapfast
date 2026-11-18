@@ -202,6 +202,14 @@ impl App {
     }
 
     /// Sends a command to the call's own account, whichever is on screen.
+    /// Hands the worker the camera picked in an earlier call, before a call opens one. A worker
+    /// starts with none, so nothing is sent while none was ever picked.
+    fn send_preferred_camera(&self, backend: &Backend) {
+        if let Some(name) = &self.settings.call_camera {
+            backend.send(Command::SetPreferredCamera(Some(name.clone())));
+        }
+    }
+
     pub(super) fn send_call_command(&self, command: Command) {
         if let Some(backend) = self.call_backend() {
             backend.send(command);
@@ -389,6 +397,7 @@ impl App {
         let generation = crate::calls::next_generation();
         let cancel = Arc::new(AtomicBool::new(false));
         let group = crate::model::ChatKind::from_id(&chat) == crate::model::ChatKind::Group;
+        self.send_preferred_camera(&self.backend);
         self.backend.send(Command::StartCall {
             chat: chat.clone(),
             video,
@@ -416,6 +425,7 @@ impl App {
         }
         let generation = crate::calls::next_generation();
         let cancel = Arc::new(AtomicBool::new(false));
+        self.send_preferred_camera(&self.backend);
         self.backend.send(Command::JoinCallLink {
             token,
             video,
@@ -698,6 +708,20 @@ impl App {
             Action::StartVideoCall(chat) => self.place_call(chat, true),
             Action::SetCallCamera(on) => self.send_call_command(Command::SetCallCamera(on)),
             Action::SetCallCameraDevice(device) => {
+                // Kept by name for the next calls: an index can change when a camera is plugged
+                // in or out.
+                let name = device.as_ref().and_then(|id| {
+                    self.call_devices
+                        .cameras
+                        .iter()
+                        .find(|camera| &camera.id == id)
+                        .map(|camera| camera.label.clone())
+                });
+                if self.settings.call_camera != name {
+                    self.settings.call_camera = name.clone();
+                    self.save_settings();
+                }
+                self.send_call_command(Command::SetPreferredCamera(name));
                 self.send_call_command(Command::SetCallCameraDevice(device));
             }
             Action::AnswerCall => {
@@ -705,6 +729,9 @@ impl App {
                     && self.call_answering != Some(call.generation)
                 {
                     self.call_answering = Some(call.generation);
+                    if let Some(backend) = self.call_backend() {
+                        self.send_preferred_camera(backend);
+                    }
                     self.send_call_command(Command::AnswerCall);
                 }
             }
@@ -838,6 +865,34 @@ mod tests {
         let mut update = update(generation, CallPhase::Ended);
         update.outcome = Some(outcome);
         update
+    }
+
+    #[test]
+    fn a_picked_camera_is_kept_by_name_for_the_next_call() {
+        let directory = tempfile::tempdir().unwrap();
+        let (mut app, mut commands) = app(directory.path());
+        let ctx = egui::Context::default();
+        app.call_devices.cameras = vec![
+            crate::calls::CameraDevice {
+                id: "0".to_owned(),
+                label: "FaceTime HD Camera".to_owned(),
+            },
+            crate::calls::CameraDevice {
+                id: "1".to_owned(),
+                label: "Logitech C920".to_owned(),
+            },
+        ];
+        app.handle_call_update(update(1, CallPhase::Active));
+        sent(&mut commands);
+        app.apply(Action::SetCallCameraDevice(Some("1".to_owned())), &ctx);
+        assert_eq!(app.settings.call_camera.as_deref(), Some("Logitech C920"));
+        assert!(sent(&mut commands).iter().any(|command| matches!(
+            command,
+            Command::SetPreferredCamera(Some(name)) if name == "Logitech C920"
+        )));
+        // Back to the default forgets it.
+        app.apply(Action::SetCallCameraDevice(None), &ctx);
+        assert_eq!(app.settings.call_camera, None);
     }
 
     #[test]

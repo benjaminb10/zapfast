@@ -413,6 +413,15 @@ pub fn default_camera(list: &DeviceList, camera: Option<String>) -> Option<Strin
     }
 }
 
+/// The id of the camera named `name`, if the machine still has it.
+pub fn camera_named(list: &DeviceList, name: Option<&str>) -> Option<String> {
+    let name = name?;
+    list.cameras
+        .iter()
+        .find(|camera| camera.label == name)
+        .map(|camera| camera.id.clone())
+}
+
 /// Where a camera stands when none is chosen: 0 for one built into the computer, 1 for any other
 /// real camera, 2 for a virtual one fed by another app. Read from the name the platform reports,
 /// the only thing all three platforms give.
@@ -4158,6 +4167,13 @@ mod tests {
             ..DeviceList::default()
         };
         assert_eq!(default_camera(&external, None).as_deref(), Some("6"));
+        // A camera picked in an earlier call is found again by its name, whatever its index now.
+        assert_eq!(
+            camera_named(&virtual_first, Some("Camo Camera")).as_deref(),
+            Some("1")
+        );
+        assert_eq!(camera_named(&virtual_first, Some("Unplugged")), None);
+        assert_eq!(camera_named(&virtual_first, None), None);
         // No camera named and none reported stays none, so the caller refuses rather than invents.
         assert_eq!(default_camera(&DeviceList::default(), None), None);
         // An empty list means discovery could not run, not that nothing is plugged in: the choice

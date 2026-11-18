@@ -1015,6 +1015,7 @@ pub async fn run(
         call: None,
         phone_only_calls: Vec::new(),
         call_devices: crate::calls::DeviceList::default(),
+        preferred_camera: None,
         wa_sender,
         me_pn: None,
         me_lid: None,
@@ -1729,6 +1730,8 @@ struct Worker {
     /// The devices the call screen was last handed, kept so a device that goes away can be named
     /// by the description the user saw in the picker rather than by its node name.
     call_devices: crate::calls::DeviceList,
+    /// The camera the user picked in an earlier call, by name: [`Command::SetPreferredCamera`].
+    preferred_camera: Option<String>,
 }
 
 /// A queued forward: where it goes, the protobuf, and its disappearing timer.
@@ -7361,6 +7364,7 @@ impl Worker {
             Command::SetCallMicrophone(device) => self.set_call_microphone(device),
             Command::SetCallSpeaker(device) => self.set_call_speaker(device),
             Command::SetCallCameraDevice(device) => self.set_call_camera_device(device).await,
+            Command::SetPreferredCamera(name) => self.preferred_camera = name,
             Command::RefreshCallDevices => {
                 self.emit_call_devices().await;
             }
@@ -20430,6 +20434,7 @@ mod receipt_tests {
             call: None,
             phone_only_calls: Vec::new(),
             call_devices: crate::calls::DeviceList::default(),
+            preferred_camera: None,
             wa_sender,
             me_pn: Some(ME.to_owned()),
             me_lid: None,

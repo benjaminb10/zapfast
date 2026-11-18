@@ -459,6 +459,9 @@ pub struct Settings {
     /// Transcribe voice messages as they arrive, on this computer. Off by
     /// default: the first one downloads the speech model.
     pub auto_transcribe: bool,
+    /// The camera last picked in a call, by the name the system gives it (an index can change
+    /// when a camera is plugged in or out). `None` is "Default camera".
+    pub call_camera: Option<String>,
     /// Show the default doodle wallpaper behind conversations.
     pub show_wallpaper: bool,
     /// Colour selected in the wallpaper picker.
@@ -574,6 +577,7 @@ impl Default for Settings {
             send_typing: true,
             auto_download: true,
             auto_transcribe: false,
+            call_camera: None,
             show_wallpaper: true,
             wallpaper_color: WallpaperColor::Theme,
             dark_wallpaper_color: WallpaperColor::Theme,
