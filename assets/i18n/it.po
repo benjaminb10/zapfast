@@ -2339,8 +2339,8 @@ msgid "Camera"
 msgstr "Fotocamera"
 
 #: src/ui/call.rs:648
-msgid "First camera"
-msgstr "Prima fotocamera"
+msgid "Default camera"
+msgstr "Fotocamera predefinita"
 
 #: src/ui/call.rs:737
 msgid "Incoming voice call"

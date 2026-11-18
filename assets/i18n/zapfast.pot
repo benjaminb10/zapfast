@@ -2206,7 +2206,7 @@ msgid "Camera"
 msgstr ""
 
 #: src/ui/call.rs:648
-msgid "First camera"
+msgid "Default camera"
 msgstr ""
 
 #: src/ui/call.rs:737

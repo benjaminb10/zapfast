@@ -2353,8 +2353,8 @@ msgid "Camera"
 msgstr "Caméra"
 
 #: src/ui/call.rs:648
-msgid "First camera"
-msgstr "Première caméra"
+msgid "Default camera"
+msgstr "Caméra par défaut"
 
 #: src/ui/call.rs:737
 msgid "Incoming voice call"

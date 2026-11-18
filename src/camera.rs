@@ -1102,7 +1102,10 @@ mod hardware_tests {
             match super::backend::Camera::open(id, (1280, 720), 25) {
                 Ok(mut camera) => {
                     let mode = camera.mode();
-                    eprintln!("{name}: opened at {}x{} {} fps", mode.width, mode.height, mode.fps);
+                    eprintln!(
+                        "{name}: opened at {}x{} {} fps",
+                        mode.width, mode.height, mode.fps
+                    );
                     camera.stop();
                 }
                 Err(error) => {

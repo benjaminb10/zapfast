@@ -563,7 +563,7 @@ impl Worker {
             Some(runtime) => {
                 if on && !runtime.call.is_video() {
                     // A voice call: ask the peer for video, or answer the peer who asked, and start
-                    // draining the frames it brings, from the first camera the machine reports.
+                    // draining the frames it brings, from the machine's own camera.
                     let camera = calls::default_camera(&self.call_devices, None);
                     match runtime.call.upgrade_to_video(camera).await {
                         Ok(frames) => {
@@ -610,8 +610,8 @@ impl Worker {
     }
 
     pub(super) async fn set_call_camera_device(&mut self, device: Option<String>) {
-        // `None` is the picker's "First camera": a camera has no system default, so it is read as
-        // the first camera the machine reports, the same reading a call's startup applies.
+        // `None` is the picker's "Default camera": a camera has no system default, so it is read as
+        // the machine's own camera, the same reading a call's startup applies.
         let device = calls::default_camera(&self.call_devices, device);
         let outcome = match self.call.as_mut() {
             Some(runtime) => Some(runtime.call.set_camera_device(device).await),

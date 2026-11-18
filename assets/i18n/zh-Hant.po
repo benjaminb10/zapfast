@@ -2270,8 +2270,8 @@ msgid "Camera"
 msgstr "相機"
 
 #: src/ui/call.rs:648
-msgid "First camera"
-msgstr "第一台相機"
+msgid "Default camera"
+msgstr "預設相機"
 
 #: src/ui/call.rs:737
 msgid "Incoming voice call"

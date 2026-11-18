@@ -445,7 +445,10 @@ pub fn window_title() -> String {
     match profile() {
         Some(profile) => {
             let mut chars = profile.chars();
-            let first = chars.next().map(|c| c.to_ascii_uppercase()).unwrap_or_default();
+            let first = chars
+                .next()
+                .map(|c| c.to_ascii_uppercase())
+                .unwrap_or_default();
             format!("ZapFast {first}{}", chars.as_str())
         }
         None => "ZapFast".to_owned(),

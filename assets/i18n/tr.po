@@ -2319,8 +2319,8 @@ msgid "Camera"
 msgstr "Kamera"
 
 #: src/ui/call.rs:648
-msgid "First camera"
-msgstr "İlk kamera"
+msgid "Default camera"
+msgstr "Varsayılan kamera"
 
 #: src/ui/call.rs:737
 msgid "Incoming voice call"

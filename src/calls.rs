@@ -370,8 +370,8 @@ pub fn resolve_devices(
         };
     let microphone = checked(DeviceKind::Microphone, microphone, &microphones, &mut lost);
     let speaker = checked(DeviceKind::Speaker, speaker, &speakers, &mut lost);
-    // A camera has no system default the way an audio device does, so the picker's "First camera"
-    // has to mean the first camera the machine reports. Without this a fresh install — whose stored
+    // A camera has no system default the way an audio device does, so the picker's "Default camera"
+    // has to mean the machine's own camera ([`default_camera`]). Without this a fresh install — whose stored
     // camera is `None` — could not start or answer a video call at all, and could not even reach the
     // in-call picker to choose a node. A named camera the machine no longer has falls back the same
     // way, and the fallback is reported, so the screen can say the old one is gone.
@@ -386,10 +386,10 @@ pub fn resolve_devices(
     }
 }
 
-/// Reads the picker's "First camera" as a camera that exists.
+/// Reads the picker's "Default camera" as a camera that exists.
 ///
-/// A camera has no system default the way a sound card does, so `None` means the first camera the
-/// machine reports — the same reading [`resolve_devices`] applies when a call starts. A camera the
+/// A camera has no system default the way a sound card does, so `None` means the machine's own camera,
+/// ahead of virtual ones — the same reading [`resolve_devices`] applies when a call starts. A camera the
 /// machine no longer has falls back the same way. `None` comes back only when nothing is named and
 /// nothing is listed, and then the caller's own failure path says so rather than this inventing one.
 ///
@@ -402,8 +402,42 @@ pub fn default_camera(list: &DeviceList, camera: Option<String>) -> Option<Strin
         // A camera the machine still reports is kept, even when the list is empty: an empty list
         // means discovery could not run, not that nothing is plugged in.
         Some(id) if list.cameras.is_empty() || list.cameras.iter().any(|c| c.id == id) => Some(id),
-        // A camera the machine no longer has, or no choice at all: the first one it does have.
-        _ => list.cameras.first().map(|camera| camera.id.clone()),
+        // A camera the machine no longer has, or no choice at all: the machine's own camera,
+        // ahead of a virtual one (Camo, OBS) that may sit first in the list but only shows
+        // something while its app runs.
+        _ => list
+            .cameras
+            .iter()
+            .min_by_key(|camera| camera_rank(&camera.label))
+            .map(|camera| camera.id.clone()),
+    }
+}
+
+/// Where a camera stands when none is chosen: 0 for one built into the computer, 1 for any other
+/// real camera, 2 for a virtual one fed by another app. Read from the name the platform reports,
+/// the only thing all three platforms give.
+fn camera_rank(label: &str) -> u8 {
+    let name = label.to_lowercase();
+    const BUILT_IN: [&str; 5] = ["facetime", "built-in", "builtin", "integrated", "intégrée"];
+    const VIRTUAL: [&str; 11] = [
+        "virtual",
+        "camo",
+        "obs",
+        "snap camera",
+        "mmhmm",
+        "ndi webcam",
+        "manycam",
+        "xsplit",
+        "droidcam",
+        "epoccam",
+        "iriun",
+    ];
+    if BUILT_IN.iter().any(|word| name.contains(word)) {
+        0
+    } else if VIRTUAL.iter().any(|word| name.contains(word)) {
+        2
+    } else {
+        1
     }
 }
 
@@ -3488,7 +3522,7 @@ impl Call {
 
     /// Switches the camera. A running camera is restarted on the new node.
     ///
-    /// The device arrives already resolved: `None` is the picker's "First camera", and a camera
+    /// The device arrives already resolved: `None` is the picker's "Default camera", and a camera
     /// has no system default, so the caller reads it as the first node the machine reports — exactly
     /// as [`resolve_devices`] reads it when a call starts. Resolving it here instead would enumerate
     /// devices on whatever thread is driving the call, which is the worker's async loop.
@@ -4045,8 +4079,8 @@ mod tests {
 
     #[test]
     fn a_call_with_no_camera_named_opens_with_the_machines_own() {
-        // No camera picked is what the picker calls "First camera". For a camera
-        // that has to mean the first one the machine reports, or a first video call could never
+        // No camera picked is what the picker calls "Default camera". For a camera
+        // that has to mean the machine's own, or a first video call could never
         // start: there is no system default camera to fall back on.
         let resolved = resolve_devices(&machine(), None, None, None);
         assert_eq!(resolved.camera.as_deref(), Some("0"));
@@ -4073,7 +4107,7 @@ mod tests {
         assert_eq!(
             default_camera(&machine, None).as_deref(),
             Some("0"),
-            "the picker's default means the first camera the machine reports"
+            "the picker's default means the machine's own camera"
         );
         // A camera that is still there is kept.
         assert_eq!(
@@ -4085,6 +4119,45 @@ mod tests {
             default_camera(&machine, Some("7".to_owned())).as_deref(),
             Some("0")
         );
+        // A virtual camera listed first does not win over the computer's own.
+        let virtual_first = DeviceList {
+            cameras: vec![
+                CameraDevice {
+                    id: "1".to_owned(),
+                    label: "Camo Camera".to_owned(),
+                },
+                CameraDevice {
+                    id: "2".to_owned(),
+                    label: "OBS Virtual Camera".to_owned(),
+                },
+                CameraDevice {
+                    id: "0".to_owned(),
+                    label: "Caméra FaceTime HD".to_owned(),
+                },
+            ],
+            ..DeviceList::default()
+        };
+        assert_eq!(default_camera(&virtual_first, None).as_deref(), Some("0"));
+        // A chosen camera is kept even when it is a virtual one.
+        assert_eq!(
+            default_camera(&virtual_first, Some("1".to_owned())).as_deref(),
+            Some("1")
+        );
+        // With only an external camera and a virtual one, the external one wins.
+        let external = DeviceList {
+            cameras: vec![
+                CameraDevice {
+                    id: "5".to_owned(),
+                    label: "OBS Virtual Camera".to_owned(),
+                },
+                CameraDevice {
+                    id: "6".to_owned(),
+                    label: "Logitech C920".to_owned(),
+                },
+            ],
+            ..DeviceList::default()
+        };
+        assert_eq!(default_camera(&external, None).as_deref(), Some("6"));
         // No camera named and none reported stays none, so the caller refuses rather than invents.
         assert_eq!(default_camera(&DeviceList::default(), None), None);
         // An empty list means discovery could not run, not that nothing is plugged in: the choice

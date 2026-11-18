@@ -645,7 +645,7 @@ fn devices(ui: &mut egui::Ui, app: &mut App, call: &CallUpdate, palette: &Palett
                 salt: "call-camera",
                 icon: Icon::Video,
                 title: &gettext(locale, "Camera"),
-                default_label: &gettext(locale, "First camera"),
+                default_label: &gettext(locale, "Default camera"),
                 current: call.camera.as_deref(),
                 devices: &cameras,
                 palette,
