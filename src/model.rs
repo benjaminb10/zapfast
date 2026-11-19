@@ -2997,6 +2997,13 @@ pub enum Action {
     },
     OpenUrl(String),
     CopyText(String),
+    /// Copies the whole open chat, as text, to the clipboard.
+    CopyChat,
+    /// The open chat's text, ready for the clipboard.
+    CopyChatText {
+        text: String,
+        count: u64,
+    },
     CopyImage(PathBuf),
     /// Closes the toast at this index. Only errors wait to be dismissed.
     DismissToast(usize),

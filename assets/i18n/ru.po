@@ -4156,3 +4156,14 @@ msgstr "Расшифровать"
 #: src/ui/dialogs.rs
 msgid "Message {number}"
 msgstr "Написать на {number}"
+
+#: src/ui/keys.rs
+msgid "Copy the whole chat (when the input is empty)"
+msgstr "Скопировать весь чат (когда поле ввода пустое)"
+
+#: src/app.rs
+msgid "Chat copied: {count} message"
+msgid_plural "Chat copied: {count} messages"
+msgstr[0] "Чат скопирован: {count} сообщение"
+msgstr[1] "Чат скопирован: {count} сообщения"
+msgstr[2] "Чат скопирован: {count} сообщений"

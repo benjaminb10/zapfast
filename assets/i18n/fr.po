@@ -4175,3 +4175,13 @@ msgstr "Ce message n’a pas pu être envoyé. Cliquez pour le renvoyer."
 #: src/ui/dialogs.rs
 msgid "Message {number}"
 msgstr "Envoyer un message au {number}"
+
+#: src/ui/keys.rs
+msgid "Copy the whole chat (when the input is empty)"
+msgstr "Copier toute la discussion (champ de saisie vide)"
+
+#: src/app.rs
+msgid "Chat copied: {count} message"
+msgid_plural "Chat copied: {count} messages"
+msgstr[0] "Discussion copiée : {count} message"
+msgstr[1] "Discussion copiée : {count} messages"

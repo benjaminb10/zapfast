@@ -263,6 +263,17 @@ pub enum Command {
         include_media: bool,
     },
     CancelChatExport,
+    /// Reads the whole saved chat as text for the clipboard; `you` labels our
+    /// own messages. Answered by `Event::ChatText`.
+    CopyChat {
+        chat: ChatId,
+        you: String,
+    },
+    /// Internal: the clipboard text read off the worker thread.
+    ChatTextReady {
+        chat: ChatId,
+        result: Result<(String, u64), String>,
+    },
     ChatExportTarget {
         request: u64,
         include_media: bool,
@@ -1348,6 +1359,11 @@ pub enum Event {
     ChatExportFinished {
         request: u64,
         result: Result<Option<(PathBuf, crate::archive::chat_export::Counts)>, String>,
+    },
+    /// A chat's text for the clipboard and its message count. Private content.
+    ChatText {
+        chat: ChatId,
+        result: Result<(String, u64), String>,
     },
     /// The account's media cache as measured, `None` when it could not be
     /// read. `cleared` says the cache was just emptied, so files the

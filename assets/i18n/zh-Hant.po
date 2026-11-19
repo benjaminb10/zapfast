@@ -4023,3 +4023,12 @@ msgstr "轉寫"
 #: src/ui/dialogs.rs
 msgid "Message {number}"
 msgstr "傳訊息給 {number}"
+
+#: src/ui/keys.rs
+msgid "Copy the whole chat (when the input is empty)"
+msgstr "複製整個聊天（輸入框為空時）"
+
+#: src/app.rs
+msgid "Chat copied: {count} message"
+msgid_plural "Chat copied: {count} messages"
+msgstr[0] "已複製聊天：{count} 則訊息"

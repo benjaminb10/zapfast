@@ -4254,6 +4254,15 @@ impl App {
                     self.chat_export = Some((request, counts));
                 }
             }
+            Event::ChatText { chat, result } => {
+                if !live || self.open_chat.as_deref() != Some(chat.as_str()) {
+                    return;
+                }
+                match result {
+                    Ok((text, count)) => self.actions.push(Action::CopyChatText { text, count }),
+                    Err(error) => self.toast_error(error),
+                }
+            }
             Event::ChatExportFinished { request, result } => {
                 if self
                     .chat_export
@@ -8275,6 +8284,24 @@ impl App {
             Action::CopyText(text) => {
                 ctx.copy_text(text);
                 self.toast("Copied");
+            }
+            Action::CopyChat => {
+                if let Some(chat) = self.open_chat.clone() {
+                    let you = crate::i18n::gettext(self.locale, "You").into_owned();
+                    self.backend.send(Command::CopyChat { chat, you });
+                }
+            }
+            Action::CopyChatText { text, count } => {
+                ctx.copy_text(text);
+                self.toast(
+                    crate::i18n::ngettext(
+                        self.locale,
+                        "Chat copied: {count} message",
+                        "Chat copied: {count} messages",
+                        count as u32,
+                    )
+                    .replace("{count}", &count.to_string()),
+                );
             }
             Action::CopyImage(path) => {
                 self.backend.send(Command::PrepareClipboardImage(path));

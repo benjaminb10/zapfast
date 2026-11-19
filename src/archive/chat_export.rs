@@ -107,12 +107,7 @@ impl Archive {
                 check_cancelled(cancelled)?;
                 let content: Content = serde_json::from_str(&json)
                     .map_err(|_| anyhow::anyhow!("An archived message could not be read"))?;
-                let sender = if own {
-                    "You".to_owned()
-                } else {
-                    name.filter(|name| !name.is_empty())
-                        .unwrap_or_else(|| sender.split('@').next().unwrap_or(&sender).to_owned())
-                };
+                let sender = sender_label(own, name, &sender, "You");
                 let stamp = jiff::Timestamp::from_second(at)?.to_zoned(jiff::tz::TimeZone::UTC);
                 writeln!(
                     transcript,
@@ -180,6 +175,72 @@ impl Archive {
         check_cancelled(cancelled)?;
         file.persist(target).map_err(|error| error.error)?;
         Ok(counts)
+    }
+}
+
+impl Archive {
+    /// The whole locally saved chat as plain text for the clipboard: the chat's
+    /// name, then one line per message in local time, oldest first, with a
+    /// voice message's transcript under it when one was made. Attachments are
+    /// named, not copied. `you` labels our own messages. Personal data: the
+    /// text is never logged.
+    pub(crate) fn chat_text(
+        &self,
+        chat: &str,
+        you: &str,
+        cancelled: &AtomicBool,
+    ) -> Result<(String, u64)> {
+        let _snapshot = self.connection.unchecked_transaction()?;
+        let known = self
+            .chat(chat)?
+            .context("This chat is no longer available")?;
+        ensure!(!known.locked, "Locked chats cannot be exported");
+        let zone = jiff::tz::TimeZone::system();
+        let mut text = format!("{}\n\n", one_line(&known.name));
+        let mut count = 0;
+        let mut query = self.connection.prepare(
+            "SELECT m.timestamp, m.sender, m.sender_name, m.from_me, m.content, m.edited, t.text
+             FROM messages m LEFT JOIN transcripts t ON t.chat = m.chat AND t.id = m.id
+             WHERE m.chat = ?1
+             ORDER BY m.timestamp, COALESCE(m.history_order, 9223372036854775807), m.rowid",
+        )?;
+        let mut rows = query.query([chat])?;
+        while let Some(row) = rows.next()? {
+            check_cancelled(cancelled)?;
+            let at: i64 = row.get(0)?;
+            let sender: String = row.get(1)?;
+            let name: Option<String> = row.get(2)?;
+            let own: bool = row.get(3)?;
+            let json: String = row.get(4)?;
+            let edited: bool = row.get(5)?;
+            let transcript: Option<String> = row.get(6)?;
+            let content: Content = serde_json::from_str(&json)
+                .map_err(|_| anyhow::anyhow!("An archived message could not be read"))?;
+            let stamp = jiff::Timestamp::from_second(at)?.to_zoned(zone.clone());
+            text.push_str(&format!(
+                "{} - {}: {}{}\n",
+                stamp.strftime("%d/%m/%Y %H:%M"),
+                one_line(&sender_label(own, name, &sender, you)),
+                readable(&content),
+                if edited { " [edited]" } else { "" }
+            ));
+            if let Some(transcript) = transcript.filter(|text| !text.trim().is_empty()) {
+                text.push_str(&format!("  « {} »\n", transcript.trim()));
+            }
+            count += 1;
+        }
+        Ok((text, count))
+    }
+}
+
+/// Who wrote a message, as a transcript names them: `you` for our own, else
+/// the sender's name, else their number.
+fn sender_label(own: bool, name: Option<String>, sender: &str, you: &str) -> String {
+    if own {
+        you.to_owned()
+    } else {
+        name.filter(|name| !name.is_empty())
+            .unwrap_or_else(|| sender.split('@').next().unwrap_or(sender).to_owned())
     }
 }
 
@@ -358,6 +419,38 @@ mod tests {
             pages: None,
         };
         row
+    }
+
+    /// The clipboard text names the chat, labels our messages with the given
+    /// word, keeps the order and puts a voice message's transcript under it.
+    #[test]
+    fn chat_text_lists_every_message_with_transcripts() {
+        let archive = fixture();
+        let mut theirs = message(CHAT, "a", 100, false);
+        theirs.sender_name = Some("Léa".into());
+        archive.insert_message(&theirs, None).unwrap();
+        archive
+            .insert_message(&message(CHAT, "b", 200, true), None)
+            .unwrap();
+        assert!(
+            archive
+                .set_transcript(CHAT, "a", "  Salut, on court jeudi ?  ")
+                .unwrap()
+        );
+        let (text, count) = archive
+            .chat_text(CHAT, "Vous", &AtomicBool::new(false))
+            .unwrap();
+        assert_eq!(count, 2);
+        let lines: Vec<&str> = text.lines().collect();
+        assert_eq!(lines[0], "Synthetic chat");
+        assert!(lines[2].ends_with(" - Léa: message a"), "{text}");
+        assert_eq!(lines[3], "  « Salut, on court jeudi ? »");
+        assert!(lines[4].ends_with(" - Vous: message b"), "{text}");
+        assert!(
+            archive
+                .chat_text(CHAT, "Vous", &AtomicBool::new(true))
+                .is_err()
+        );
     }
 
     /// Text export retains Unicode, multiline bodies and stable ordering across archive pages.

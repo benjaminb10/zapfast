@@ -4147,3 +4147,13 @@ msgstr "Transkribieren"
 #: src/ui/dialogs.rs
 msgid "Message {number}"
 msgstr "Nachricht an {number}"
+
+#: src/ui/keys.rs
+msgid "Copy the whole chat (when the input is empty)"
+msgstr "Den ganzen Chat kopieren (bei leerem Eingabefeld)"
+
+#: src/app.rs
+msgid "Chat copied: {count} message"
+msgid_plural "Chat copied: {count} messages"
+msgstr[0] "Chat kopiert: {count} Nachricht"
+msgstr[1] "Chat kopiert: {count} Nachrichten"

@@ -105,6 +105,20 @@ pub fn handle(app: &mut App, ctx: &egui::Context) {
         if let Some(archive) = archive {
             key(Modifiers::COMMAND, Key::E, archive);
         }
+        // Cmd+A copies the whole chat, unless a field with text in it wants
+        // its own select-all (the same rule as Home and End).
+        if jump_allowed
+            && app.chat_view()
+            && app.open_chat.is_some()
+            && app.dialog.is_none()
+            && !app.show_update
+            && app.picker.is_none()
+            && app.reaction_target.is_none()
+            && app.recording.is_none()
+            && (app.call.is_none() || app.call_surface_hidden)
+        {
+            key(Modifiers::COMMAND, Key::A, Action::CopyChat);
+        }
         key(Modifiers::COMMAND, Key::B, Action::ToggleSidebar);
         key(Modifiers::COMMAND, Key::Comma, Action::ToggleSettings);
         key(Modifiers::COMMAND, Key::Q, Action::Quit);
@@ -1101,6 +1115,7 @@ pub const SHORTCUTS: &[(&str, &str)] = &[
         "Paste text, or stage a picture from the clipboard",
     ),
     ("Ctrl+C", "Copy the selected messages"),
+    ("Ctrl+A", "Copy the whole chat (when the input is empty)"),
     ("Ctrl+B", "Collapse or expand the chat list"),
     (
         "Ctrl+End",
@@ -2651,6 +2666,23 @@ mod tests {
         let survived = press(&mut app, &ctx, Key::End, Modifiers::COMMAND);
         assert!(!survived);
         assert_eq!(app.actions, [Action::ScrollToBottom]);
+    }
+
+    /// Cmd+A (Ctrl+A) copies the open chat, and does nothing without one
+    /// or with a dialog open.
+    #[test]
+    fn select_all_copies_the_open_chat() {
+        let (_root, mut app, ids) = app_with_chats(1);
+        let ctx = egui::Context::default();
+        assert!(press(&mut app, &ctx, Key::A, Modifiers::COMMAND));
+        assert!(app.actions.is_empty());
+        app.open_chat = Some(ids[0].clone());
+        assert!(!press(&mut app, &ctx, Key::A, Modifiers::COMMAND));
+        assert_eq!(app.actions, [Action::CopyChat]);
+        app.actions.clear();
+        app.dialog = Some(Dialog::Shortcuts);
+        assert!(press(&mut app, &ctx, Key::A, Modifiers::COMMAND));
+        assert!(app.actions.is_empty());
     }
 
     #[test]

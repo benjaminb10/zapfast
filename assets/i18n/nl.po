@@ -4053,3 +4053,13 @@ msgstr "Transcriberen"
 #: src/ui/dialogs.rs
 msgid "Message {number}"
 msgstr "Bericht naar {number}"
+
+#: src/ui/keys.rs
+msgid "Copy the whole chat (when the input is empty)"
+msgstr "De hele chat kopiëren (als het invoerveld leeg is)"
+
+#: src/app.rs
+msgid "Chat copied: {count} message"
+msgid_plural "Chat copied: {count} messages"
+msgstr[0] "Chat gekopieerd: {count} bericht"
+msgstr[1] "Chat gekopieerd: {count} berichten"

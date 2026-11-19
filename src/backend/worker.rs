@@ -2051,6 +2051,7 @@ impl Worker {
                     | Event::ChatSharedChanged(_)
                     | Event::ChatMedia { .. }
                     | Event::Transcripts { .. }
+                    | Event::ChatText { .. }
             )
         {
             return;
@@ -7521,6 +7522,8 @@ impl Worker {
                 include_media,
             } => self.begin_chat_export(request, chat, include_media).await,
             Command::CancelChatExport => self.stop_chat_export().await,
+            Command::CopyChat { chat, you } => self.copy_chat(chat, you),
+            Command::ChatTextReady { chat, result } => self.chat_text_ready(chat, result),
             Command::ChatExportTarget {
                 request,
                 include_media,

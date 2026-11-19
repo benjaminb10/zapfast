@@ -200,6 +200,36 @@ impl Worker {
         }));
     }
 
+    /// Reads the whole chat as text on a blocking task, with its own read-only
+    /// connection, under the same lock rules as an export.
+    pub(super) fn copy_chat(&mut self, chat: ChatId, you: String) {
+        if !self.chat_export.allowed || !self.privacy_ready {
+            self.emit(Event::ChatText {
+                chat,
+                result: Err("Export cancelled".into()),
+            });
+            return;
+        }
+        let archive = self.dirs.archive_db();
+        let commands = self.commands.clone();
+        tokio::task::spawn_blocking(move || {
+            let result = Archive::export_reader(&archive)
+                .and_then(|reader| reader.chat_text(&chat, &you, &AtomicBool::new(false)))
+                .map_err(|error| error.to_string());
+            let _ = commands.send(Command::ChatTextReady { chat, result });
+        });
+    }
+
+    /// Hands the text to the interface unless the app was locked meanwhile.
+    pub(super) fn chat_text_ready(&self, chat: ChatId, result: Result<(String, u64), String>) {
+        let result = if self.chat_export.allowed && self.privacy_ready {
+            result
+        } else {
+            Err("Export cancelled".into())
+        };
+        self.emit(Event::ChatText { chat, result });
+    }
+
     /// Forwards progress only while the originating request is still current.
     pub(super) fn chat_export_progress(&self, request: u64, counts: Counts) {
         if self

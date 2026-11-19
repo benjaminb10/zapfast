@@ -4075,3 +4075,13 @@ msgstr "Yazıya dök"
 #: src/ui/dialogs.rs
 msgid "Message {number}"
 msgstr "{number} numarasına mesaj gönder"
+
+#: src/ui/keys.rs
+msgid "Copy the whole chat (when the input is empty)"
+msgstr "Tüm sohbeti kopyala (giriş alanı boşken)"
+
+#: src/app.rs
+msgid "Chat copied: {count} message"
+msgid_plural "Chat copied: {count} messages"
+msgstr[0] "Sohbet kopyalandı: {count} mesaj"
+msgstr[1] "Sohbet kopyalandı: {count} mesaj"

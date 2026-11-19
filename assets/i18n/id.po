@@ -4126,3 +4126,13 @@ msgstr "Transkripsikan"
 #: src/ui/dialogs.rs
 msgid "Message {number}"
 msgstr "Kirim pesan ke {number}"
+
+#: src/ui/keys.rs
+msgid "Copy the whole chat (when the input is empty)"
+msgstr "Salin seluruh chat (saat kolom pesan kosong)"
+
+#: src/app.rs
+msgid "Chat copied: {count} message"
+msgid_plural "Chat copied: {count} messages"
+msgstr[0] "Chat disalin: {count} pesan"
+msgstr[1] "Chat disalin: {count} pesan"
