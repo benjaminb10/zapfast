@@ -4171,3 +4171,7 @@ msgstr "Sur cet ordinateur, dès leur arrivée. Le premier télécharge le modè
 #: src/ui/conversation.rs
 msgid "This message could not be sent. Click to send it again."
 msgstr "Ce message n’a pas pu être envoyé. Cliquez pour le renvoyer."
+
+#: src/ui/dialogs.rs
+msgid "Message {number}"
+msgstr "Envoyer un message au {number}"

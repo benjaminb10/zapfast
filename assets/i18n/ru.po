@@ -4152,3 +4152,7 @@ msgstr "Enter отправляет"
 #: src/ui/conversation.rs
 msgid "Transcribe"
 msgstr "Расшифровать"
+
+#: src/ui/dialogs.rs
+msgid "Message {number}"
+msgstr "Написать на {number}"

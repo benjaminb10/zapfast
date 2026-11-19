@@ -4127,3 +4127,7 @@ msgstr "Intro envía"
 #: src/ui/conversation.rs
 msgid "Transcribe"
 msgstr "Transcribir"
+
+#: src/ui/dialogs.rs
+msgid "Message {number}"
+msgstr "Enviar mensaje a {number}"

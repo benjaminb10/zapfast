@@ -4122,3 +4122,7 @@ msgstr "Enter untuk mengirim"
 #: src/ui/conversation.rs
 msgid "Transcribe"
 msgstr "Transkripsikan"
+
+#: src/ui/dialogs.rs
+msgid "Message {number}"
+msgstr "Kirim pesan ke {number}"

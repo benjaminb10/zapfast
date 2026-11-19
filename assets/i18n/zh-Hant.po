@@ -4019,3 +4019,7 @@ msgstr "以 Enter 送出"
 #: src/ui/conversation.rs
 msgid "Transcribe"
 msgstr "轉寫"
+
+#: src/ui/dialogs.rs
+msgid "Message {number}"
+msgstr "傳訊息給 {number}"

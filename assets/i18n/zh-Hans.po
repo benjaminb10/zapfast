@@ -4018,3 +4018,7 @@ msgstr "回车发送"
 #: src/ui/conversation.rs
 msgid "Transcribe"
 msgstr "转写"
+
+#: src/ui/dialogs.rs
+msgid "Message {number}"
+msgstr "给 {number} 发消息"

@@ -4143,3 +4143,7 @@ msgstr "Enter sendet"
 #: src/ui/conversation.rs
 msgid "Transcribe"
 msgstr "Transkribieren"
+
+#: src/ui/dialogs.rs
+msgid "Message {number}"
+msgstr "Nachricht an {number}"

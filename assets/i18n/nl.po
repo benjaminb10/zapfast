@@ -4049,3 +4049,7 @@ msgstr "niet verzonden"
 #: src/ui/conversation.rs
 msgid "Transcribe"
 msgstr "Transcriberen"
+
+#: src/ui/dialogs.rs
+msgid "Message {number}"
+msgstr "Bericht naar {number}"
