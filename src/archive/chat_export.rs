@@ -198,6 +198,10 @@ impl Archive {
         let zone = jiff::tz::TimeZone::system();
         let mut text = format!("{}\n\n", one_line(&known.name));
         let mut count = 0;
+        // Names as the chat list shows them: the saved contact, then the name
+        // the message carries, then (one-to-one) the chat's own name.
+        let direct = crate::model::ChatKind::from_id(chat) == crate::model::ChatKind::Direct;
+        let mut names: std::collections::HashMap<String, Option<String>> = Default::default();
         let mut query = self.connection.prepare(
             "SELECT m.timestamp, m.sender, m.sender_name, m.from_me, m.content, m.edited, t.text
              FROM messages m LEFT JOIN transcripts t ON t.chat = m.chat AND t.id = m.id
@@ -220,7 +224,22 @@ impl Archive {
             text.push_str(&format!(
                 "{} - {}: {}{}\n",
                 stamp.strftime("%d/%m/%Y %H:%M"),
-                one_line(&sender_label(own, name, &sender, you)),
+                one_line(&if own {
+                    you.to_owned()
+                } else {
+                    let saved = match names.get(&sender) {
+                        Some(saved) => saved.clone(),
+                        None => {
+                            let saved = self
+                                .contact(&sender)?
+                                .and_then(|contact| contact.display_name().map(str::to_owned));
+                            names.insert(sender.clone(), saved.clone());
+                            saved
+                        }
+                    };
+                    let fallback = direct.then(|| known.name.clone());
+                    sender_label(false, saved.or(name).or(fallback), &sender, you)
+                }),
                 readable(&content),
                 if edited { " [edited]" } else { "" }
             ));
@@ -446,6 +465,20 @@ mod tests {
         assert!(lines[2].ends_with(" - Léa: message a"), "{text}");
         assert_eq!(lines[3], "  « Salut, on court jeudi ? »");
         assert!(lines[4].ends_with(" - Vous: message b"), "{text}");
+        // Without a name on the message, a one-to-one chat's own name is used.
+        archive
+            .insert_message(&message(CHAT, "c", 300, false), None)
+            .unwrap();
+        let (text, _) = archive
+            .chat_text(CHAT, "Vous", &AtomicBool::new(false))
+            .unwrap();
+        assert!(
+            text.lines()
+                .nth(5)
+                .unwrap()
+                .ends_with(" - Synthetic chat: message c"),
+            "{text}"
+        );
         assert!(
             archive
                 .chat_text(CHAT, "Vous", &AtomicBool::new(true))
