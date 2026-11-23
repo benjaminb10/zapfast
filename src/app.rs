@@ -7172,7 +7172,8 @@ impl App {
         self.toasts.retain(|toast| {
             toast.kind == ToastKind::Error || toast.created.elapsed() < INFO_TOAST_LIFETIME
         });
-        if self.settings.check_for_updates
+        if crate::updates::SELF_UPDATE
+            && self.settings.check_for_updates
             && !self.backend.is_offline()
             && self
                 .last_update_check
@@ -7229,7 +7230,8 @@ impl App {
     }
 
     fn maybe_download_update(&mut self) {
-        if !self.settings.check_for_updates
+        if !crate::updates::SELF_UPDATE
+            || !self.settings.check_for_updates
             || !self.settings.download_updates_automatically
             || self.update.is_none()
             || !matches!(self.update_download, crate::updates::DownloadState::Idle)
@@ -19206,10 +19208,15 @@ mod tests {
         assert!(matches!(app.update_download, DownloadState::Idle));
         app.settings.download_updates_automatically = true;
         app.maybe_download_update();
-        assert!(matches!(
-            app.update_download,
-            DownloadState::Downloading { .. }
-        ));
+        if crate::updates::SELF_UPDATE {
+            assert!(matches!(
+                app.update_download,
+                DownloadState::Downloading { .. }
+            ));
+        } else {
+            // This fork never fetches the official build.
+            assert!(matches!(app.update_download, DownloadState::Idle));
+        }
         app.update_download =
             DownloadState::Ready(Box::new(Prepared::sample(installation, "99.0.0")));
         app.maybe_download_update();

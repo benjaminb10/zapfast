@@ -1,3 +1,30 @@
+> [!NOTE]
+> **Fork de [crmne/zapfast](https://github.com/crmne/zapfast)** avec la transcription des messages vocaux et quelques correctifs.
+> Tout le mérite de ZapFast revient à Carmine Paolino. Ce fork suit chaque version officielle et y réapplique les ajouts ci-dessous.
+
+## Ce que ce fork ajoute
+
+- **Transcription des vocaux**, en local sur le Mac avec [whisper.cpp](https://github.com/ggml-org/whisper.cpp) : aucun son ni texte ne quitte l'ordinateur. Bouton « Transcrire » sous chaque vocal, ou transcription automatique dans les Réglages. Langue détectée toute seule (français, anglais, etc.).
+- **Renvoyer un message qui n'est pas parti** (la version officielle ne le renvoie jamais).
+- **Écrire à un numéro non enregistré** depuis « Nouvelle discussion ».
+- **Copier toute une discussion** avec Cmd+A, avec le nom de l'autre personne.
+- **Caméra** : la caméra intégrée du Mac passe avant Camo ou OBS, le dernier choix est gardé, et les caméras au format refusé (FaceTime) s'ouvrent.
+- **Vocaux qui ne se lisaient pas** (Opus à une fréquence inhabituelle) : corrigé.
+- **Deuxième numéro** (par exemple WhatsApp Business) dans une appli à part : lancer avec la variable `ZAPFAST_PROFILE=pro`.
+
+## Installer (Mac Apple Silicon)
+
+1. Télécharger le `.dmg` de la [dernière version du fork](https://github.com/benjaminb10/zapfast/releases/latest).
+2. L'ouvrir et glisser **ZapFast** dans **Applications**. L'appli est signée et notarisée par Apple : elle s'ouvre normalement.
+3. Au premier lancement, scanner le QR code avec WhatsApp sur le téléphone (Réglages > Appareils connectés > Connecter un appareil).
+4. Première transcription : l'appli télécharge une fois le modèle Whisper (environ 570 Mo), puis tout se passe hors ligne.
+
+Si une version officielle de ZapFast est déjà installée, celle-ci la remplace et garde les discussions. Ce fork ne se met pas à jour tout seul (la mise à jour officielle effacerait la transcription) : pour une nouvelle version, reprendre le `.dmg` de la dernière release.
+
+Compiler soi-même : `cargo build --release`, puis `bash packaging/macos/bundle.sh target/release/zapfast ZapFast.app <version>`.
+
+---
+
 <p align="center">
   <img src="docs/assets/images/logo.svg" alt="ZapFast logo" width="88" height="88">
 </p>

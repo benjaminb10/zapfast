@@ -11,6 +11,11 @@ pub use fastframe_update::{
 };
 use fastframe_update::{MacConfig, ReqwestTransport, UpdateConfig};
 
+/// This fork (benjaminb10/zapfast) never updates itself: the official
+/// releases would replace it with a build without voice transcription. New
+/// versions of the fork come from its own GitHub releases.
+pub const SELF_UPDATE: bool = false;
+
 /// ZapFast's releases and the names its installations have had.
 pub const CONFIG: UpdateConfig = UpdateConfig {
     // Cask and bundle names from before the rename. This also accepts
